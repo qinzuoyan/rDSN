@@ -31,9 +31,9 @@ namespace dsn { namespace replication {
 
 struct remote_learner_state
 {
-    uint64_t signature;
-    task_ptr timeout_task;
-    decree   prepare_start_decree;
+    uint64_t signature; // init in replica::add_potential_secondary()
+    task_ptr timeout_task; // not used currently
+    decree   prepare_start_decree; // if start prepare catch-up, mark the start decree
 };
 
 typedef std::unordered_map<end_point, remote_learner_state> learner_map;

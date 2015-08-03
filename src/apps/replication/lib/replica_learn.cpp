@@ -48,6 +48,13 @@ void replica::init_learn(uint64_t signature)
 
     if (signature != _potential_secondary_states.learning_signature)
     {
+        // trigger flush but not need to wait
+        int err = _app->flush(false);
+        if (err != 0)
+        {
+            handle_learning_error(err);
+            return;
+        }
         _potential_secondary_states.cleanup(true);
         _potential_secondary_states.learning_signature = signature;
         _potential_secondary_states.learning_status = LearningWithoutPrepare;
@@ -79,6 +86,7 @@ void replica::init_learn(uint64_t signature)
         
     _potential_secondary_states.learning_round_is_running = true;
 
+    // init learn request
     std::shared_ptr<learn_request> request(new learn_request);
     request->gpid = get_gpid();
     request->last_committed_decree_in_app = _app->last_committed_decree();
@@ -106,11 +114,12 @@ void replica::init_learn(uint64_t signature)
         );
 }
 
+// used by primary when received learn request from potential secondary
 void replica::on_learn(const learn_request& request, __out_param learn_response& response)
 {
     check_hashed_access();
 
-    if (PS_PRIMARY  != status())
+    if (PS_PRIMARY != status())
     {
         response.err = ERR_INVALID_STATE;
         return;
@@ -154,10 +163,12 @@ void replica::on_learn(const learn_request& request, __out_param learn_response&
     response.commit_decree = last_committed_decree();
     response.err = ERR_OK; 
 
+    // start prepare catch-up if need
     if (request.last_committed_decree_in_app + _options.staleness_for_start_prepare_for_potential_secondary >= last_committed_decree())
     {
         if (it->second.prepare_start_decree == invalid_decree)
         {
+            // start from (last_committed_decree + 1)
             it->second.prepare_start_decree = last_committed_decree() + 1;
 
             cleanup_preparing_mutations(true);
@@ -193,6 +204,7 @@ void replica::on_learn(const learn_request& request, __out_param learn_response&
     }
 }
 
+// used by potential secondary when received learn reply from primary
 void replica::on_learn_reply(error_code err, std::shared_ptr<learn_request>& req, std::shared_ptr<learn_response>& resp)
 {
     check_hashed_access();
@@ -263,48 +275,58 @@ void replica::on_copy_remote_state_completed(error_code err2, int size, std::sha
 {   
     learn_state localState;
     localState.meta = resp->state.meta;
-    end_point& server = resp->config.primary;     
+    end_point& server = resp->config.primary;
     if (err2 == ERR_OK)
     {
-        for (auto itr = resp->state.files.begin(); itr != resp->state.files.end(); ++itr)
-        {
-            std::string file;
-            if (dir().back() == '/' || itr->front() == '/')
-                file = dir() + *itr;
-            else 
-                file = dir() + '/' + *itr;
+        // flush before learn
+        int err = _app->flush(true);
 
-            localState.files.push_back(file);
-        }
+        if (err == 0)
+        {
+            dassert (_app->last_committed_decree() == _app->last_durable_decree(), "");
+
+            for (auto itr = resp->state.files.begin(); itr != resp->state.files.end(); ++itr)
+            {
+                std::string file;
+                if (dir().back() == '/' || itr->front() == '/')
+                    file = dir() + *itr;
+                else
+                    file = dir() + '/' + *itr;
+
+                localState.files.push_back(file);
+            }
                 
-         // the only place where there is non-in-partition-thread update  
-        decree oldDecree = _app->last_committed_decree();
+             // the only place where there is non-in-partition-thread update
+            decree oldDecree = _app->last_committed_decree();
 
-        int err = _app->apply_learn_state(resp->state);
+            err = _app->apply_learn_state(resp->state);
 
-        ddebug(
-                "%s: learning %d files to %s, err = %x, "
-                "appCommit(%llu => %llu), durable(%llu), remoteC(%llu), prepStart(%llu), state(%s)",
-                name(),
-                resp->state.files.size(), _dir.c_str(), err,
-                oldDecree, _app->last_committed_decree(),
-                _app->last_durable_decree(),                
-                resp->commit_decree,
-                resp->prepare_start_decree,
-                enum_to_string(_potential_secondary_states.learning_status)
-                );
+            ddebug(
+                    "%s: learning %d files to %s, err = %x, "
+                    "appCommit(%llu => %llu), durable(%llu), "
+                    "remoteC(%llu), prepStart(%llu), state(%s)",
+                    name(),
+                    resp->state.files.size(), _dir.c_str(), err,
+                    oldDecree, _app->last_committed_decree(),
+                    _app->last_durable_decree(),
+                    resp->commit_decree,
+                    resp->prepare_start_decree,
+                    enum_to_string(_potential_secondary_states.learning_status)
+                    );
 
-        if (err == 0 && _app->last_committed_decree() >= resp->commit_decree)
-        {
-            err = _app->flush(true);
             if (err == 0)
             {
-                dassert (_app->last_committed_decree() == _app->last_durable_decree(), "");
+                // flush after learn
+                err = _app->flush(true);
             }
         }
 
         // translate to general error code
-        if (err != 0)
+        if (err == 0)
+        {
+            dassert (_app->last_committed_decree() == _app->last_durable_decree(), "");
+        }
+        else
         {
             err2 = ERR_LOCAL_APP_FAILURE;
         }

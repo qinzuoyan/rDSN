@@ -59,6 +59,7 @@ public:
     virtual int  close(bool clear_state) = 0; // must be thread-safe
 
     // update _last_durable_decree internally
+    // if force is true, means wait flush done
     virtual int  flush(bool force) = 0;  // must be thread-safe
     
     // replicatoin framework may emit empty write request to this app 
@@ -72,6 +73,8 @@ public:
 
     // 
     // to learn [start, infinite) from remote replicas
+    //
+    // start is usually the last_committed_decree_in_app of the learner.
     //
     // note the files in learn_state are copied from dir /replica@remote/data to dir /replica@local/learn
     // so when apply the learned file state, make sure using learn_dir() instead of data_dir() to get the

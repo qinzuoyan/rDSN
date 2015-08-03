@@ -732,11 +732,12 @@ namespace dsn { namespace replication {
     };
 
     // ---------- learn_request -------------
+    // sent from potential secondary (the learner) to primary
     struct learn_request
     {
         global_partition_id gpid;
-        ::dsn::end_point learner;
-        int64_t signature;
+        ::dsn::end_point learner; // learner's address
+        int64_t signature; // learner's signature
         int64_t last_committed_decree_in_app;
         int64_t last_committed_decree_in_prepare_list;
         ::dsn::blob app_specific_learn_request;
@@ -766,8 +767,8 @@ namespace dsn { namespace replication {
     struct learn_response
     {
         ::dsn::error_code err;
-        replica_configuration config;
-        int64_t commit_decree;
+        replica_configuration config; // current learner's replica config on primary
+        int64_t commit_decree; // current last committed decree on primary
         int64_t prepare_start_decree;
         learn_state state;
         std::string base_local_dir;
@@ -796,11 +797,12 @@ namespace dsn { namespace replication {
     // ---------- group_check_request -------------
     struct group_check_request
     {
-        std::string app_type;
-        ::dsn::end_point node;
-        replica_configuration config;
-        int64_t last_committed_decree;
-        int64_t learner_signature;
+        std::string app_type; // app type
+        ::dsn::end_point node; // target node
+        replica_configuration config; // replica config:
+                                      //   PS_POTENTIAL_SECONDARY: for learning
+        int64_t last_committed_decree; // current last committed decree on primary
+        int64_t learner_signature; // signature if used for learning
     };
 
     inline void marshall(::dsn::binary_writer& writer, const group_check_request& val, uint16_t pos = 0xffff)
@@ -891,11 +893,12 @@ namespace dsn { namespace replication {
     };
 
     // ---------- configuration_update_request -------------
+    // configuration_update_request is always sent to primary node
     struct configuration_update_request
     {
-        partition_configuration config;
-        config_type type;
-        ::dsn::end_point node;
+        partition_configuration config; // current partition config
+        config_type type; // config type
+        ::dsn::end_point node; // target node
     };
 
     inline void marshall(::dsn::binary_writer& writer, const configuration_update_request& val, uint16_t pos = 0xffff)

@@ -155,6 +155,7 @@ void replica::add_potential_secondary(configuration_update_request& proposal)
         return;
     }
 
+    // add remote_learner_state into primary_context
     remote_learner_state state;
     state.prepare_start_decree = invalid_decree;
     state.signature = random64(0, (uint64_t)(-1LL));
@@ -163,6 +164,7 @@ void replica::add_potential_secondary(configuration_update_request& proposal)
     _primary_states.learners[proposal.node] = state;
     _primary_states.statuses[proposal.node] = PS_POTENTIAL_SECONDARY;
 
+    // init group check request
     group_check_request request;
     request.app_type = _primary_states.membership.app_type;
     request.node = proposal.node;
