@@ -26,10 +26,10 @@
 #include "load_balancer.h"
 #include <algorithm>
 
-bool MachineLoadComp(const std::pair<end_point, int>& l, const std::pair<end_point, int>& r)
-{
-    return l.second < r.second;
-}
+# ifdef __TITLE__
+# undef __TITLE__
+# endif
+# define __TITLE__ "load.balancer"
 
 load_balancer::load_balancer(server_state* state)
 : _state(state), serverlet<load_balancer>("load_balancer")
@@ -63,9 +63,9 @@ void load_balancer::run(global_partition_id gpid)
     run_lb(pc);
 }
 
-end_point load_balancer::find_minimal_load_machine(bool primaryOnly)
+dsn_address_t load_balancer::find_minimal_load_machine(bool primaryOnly)
 {
-    std::vector<std::pair<end_point, int>> stats;
+    std::vector<std::pair<dsn_address_t, int>> stats;
 
     for (auto it = _state->_nodes.begin(); it != _state->_nodes.end(); it++)
     {
@@ -77,29 +77,27 @@ end_point load_balancer::find_minimal_load_machine(bool primaryOnly)
     }
 
     
-    std::sort(stats.begin(), stats.end(), [](const std::pair<end_point, int>& l, const std::pair<end_point, int>& r)
+    std::sort(stats.begin(), stats.end(), [](const std::pair<dsn_address_t, int>& l, const std::pair<dsn_address_t, int>& r)
     {
         return l.second < r.second;
     });
-    
-    //std::sort(stats.begin(), stats.end(), MachineLoadComp);
 
     if (stats.empty())
     {
-        return end_point::INVALID;
+        return dsn_address_invalid;
     }
 
-    int candidateCount = 1;
+    int candidate_count = 1;
     int val = stats[0].second;
 
     for (size_t i = 1; i < stats.size(); i++)
     {
         if (stats[i].second > val)
             break;
-        candidateCount++;
+        candidate_count++;
     }
 
-    return stats[env::random32(0, candidateCount - 1)].first;
+    return stats[dsn_random32(0, candidate_count - 1)].first;
 }
 
 void load_balancer::run_lb(partition_configuration& pc)
@@ -110,11 +108,11 @@ void load_balancer::run_lb(partition_configuration& pc)
     configuration_update_request proposal;
     proposal.config = pc;
 
-    if (pc.primary == end_point::INVALID)
+    if (pc.primary == dsn_address_invalid)
     {
         if (pc.secondaries.size() > 0)
         {
-            proposal.node = pc.secondaries[env::random32(0, static_cast<int>(pc.secondaries.size()) - 1)];
+            proposal.node = pc.secondaries[dsn_random32(0, static_cast<int>(pc.secondaries.size()) - 1)];
             proposal.type = CT_UPGRADE_TO_PRIMARY;
         }
         else
@@ -123,7 +121,7 @@ void load_balancer::run_lb(partition_configuration& pc)
             proposal.type = CT_ASSIGN_PRIMARY;
         }
 
-        if (proposal.node != end_point::INVALID)
+        if (proposal.node != dsn_address_invalid)
         {
             send_proposal(proposal.node, proposal);
         }
@@ -133,7 +131,9 @@ void load_balancer::run_lb(partition_configuration& pc)
     {
         proposal.type = CT_ADD_SECONDARY;
         proposal.node = find_minimal_load_machine(false);
-        if (proposal.node != end_point::INVALID)
+        if (proposal.node != dsn_address_invalid && 
+            proposal.node != pc.primary &&
+            std::find(pc.secondaries.begin(), pc.secondaries.end(), proposal.node) == pc.secondaries.end())
         {
             send_proposal(pc.primary, proposal);
         }
@@ -145,8 +145,15 @@ void load_balancer::run_lb(partition_configuration& pc)
 }
 
 // meta server => partition server
-void load_balancer::send_proposal(const end_point& node, const configuration_update_request& proposal)
+void load_balancer::send_proposal(const dsn_address_t& node, const configuration_update_request& proposal)
 {
+    dinfo("send proposal %s of %s:%hu, current ballot = %lld", 
+        enum_to_string(proposal.type),
+        proposal.node.name,
+        proposal.node.port,
+        proposal.config.ballot
+        );
+
     rpc::call_one_way_typed(node, RPC_CONFIG_PROPOSAL, proposal, gpid_to_hash(proposal.config.gpid));
 }
 

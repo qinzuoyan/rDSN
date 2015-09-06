@@ -10,7 +10,7 @@
 //
 // # define DSN_NOT_USE_DEFAULT_SERIALIZATION
 
-# include <dsn/internal/serialization.h>
+# include <dsn/service_api_cpp.h>
 
 # ifdef DSN_NOT_USE_DEFAULT_SERIALIZATION
 
@@ -19,7 +19,7 @@
 
 namespace dsn { namespace replication { 
     // ---------- global_partition_id -------------
-    inline void marshall(::dsn::binary_writer& writer, const global_partition_id& val, uint16_t pos = 0xffff)
+    inline void marshall(::dsn::binary_writer& writer, const global_partition_id& val)
     {
         boost::shared_ptr<::dsn::binary_writer_transport> transport(new ::dsn::binary_writer_transport(writer));
         ::apache::thrift::protocol::TBinaryProtocol proto(transport);
@@ -34,7 +34,7 @@ namespace dsn { namespace replication {
     };
 
     // ---------- mutation_header -------------
-    inline void marshall(::dsn::binary_writer& writer, const mutation_header& val, uint16_t pos = 0xffff)
+    inline void marshall(::dsn::binary_writer& writer, const mutation_header& val)
     {
         boost::shared_ptr<::dsn::binary_writer_transport> transport(new ::dsn::binary_writer_transport(writer));
         ::apache::thrift::protocol::TBinaryProtocol proto(transport);
@@ -49,7 +49,7 @@ namespace dsn { namespace replication {
     };
 
     // ---------- mutation_data -------------
-    inline void marshall(::dsn::binary_writer& writer, const mutation_data& val, uint16_t pos = 0xffff)
+    inline void marshall(::dsn::binary_writer& writer, const mutation_data& val)
     {
         boost::shared_ptr<::dsn::binary_writer_transport> transport(new ::dsn::binary_writer_transport(writer));
         ::apache::thrift::protocol::TBinaryProtocol proto(transport);
@@ -64,7 +64,7 @@ namespace dsn { namespace replication {
     };
 
     // ---------- partition_configuration -------------
-    inline void marshall(::dsn::binary_writer& writer, const partition_configuration& val, uint16_t pos = 0xffff)
+    inline void marshall(::dsn::binary_writer& writer, const partition_configuration& val)
     {
         boost::shared_ptr<::dsn::binary_writer_transport> transport(new ::dsn::binary_writer_transport(writer));
         ::apache::thrift::protocol::TBinaryProtocol proto(transport);
@@ -79,7 +79,7 @@ namespace dsn { namespace replication {
     };
 
     // ---------- replica_configuration -------------
-    inline void marshall(::dsn::binary_writer& writer, const replica_configuration& val, uint16_t pos = 0xffff)
+    inline void marshall(::dsn::binary_writer& writer, const replica_configuration& val)
     {
         boost::shared_ptr<::dsn::binary_writer_transport> transport(new ::dsn::binary_writer_transport(writer));
         ::apache::thrift::protocol::TBinaryProtocol proto(transport);
@@ -94,7 +94,7 @@ namespace dsn { namespace replication {
     };
 
     // ---------- prepare_msg -------------
-    inline void marshall(::dsn::binary_writer& writer, const prepare_msg& val, uint16_t pos = 0xffff)
+    inline void marshall(::dsn::binary_writer& writer, const prepare_msg& val)
     {
         boost::shared_ptr<::dsn::binary_writer_transport> transport(new ::dsn::binary_writer_transport(writer));
         ::apache::thrift::protocol::TBinaryProtocol proto(transport);
@@ -109,7 +109,7 @@ namespace dsn { namespace replication {
     };
 
     // ---------- read_request_header -------------
-    inline void marshall(::dsn::binary_writer& writer, const read_request_header& val, uint16_t pos = 0xffff)
+    inline void marshall(::dsn::binary_writer& writer, const read_request_header& val)
     {
         boost::shared_ptr<::dsn::binary_writer_transport> transport(new ::dsn::binary_writer_transport(writer));
         ::apache::thrift::protocol::TBinaryProtocol proto(transport);
@@ -124,7 +124,7 @@ namespace dsn { namespace replication {
     };
 
     // ---------- write_request_header -------------
-    inline void marshall(::dsn::binary_writer& writer, const write_request_header& val, uint16_t pos = 0xffff)
+    inline void marshall(::dsn::binary_writer& writer, const write_request_header& val)
     {
         boost::shared_ptr<::dsn::binary_writer_transport> transport(new ::dsn::binary_writer_transport(writer));
         ::apache::thrift::protocol::TBinaryProtocol proto(transport);
@@ -139,7 +139,7 @@ namespace dsn { namespace replication {
     };
 
     // ---------- rw_response_header -------------
-    inline void marshall(::dsn::binary_writer& writer, const rw_response_header& val, uint16_t pos = 0xffff)
+    inline void marshall(::dsn::binary_writer& writer, const rw_response_header& val)
     {
         boost::shared_ptr<::dsn::binary_writer_transport> transport(new ::dsn::binary_writer_transport(writer));
         ::apache::thrift::protocol::TBinaryProtocol proto(transport);
@@ -154,7 +154,7 @@ namespace dsn { namespace replication {
     };
 
     // ---------- prepare_ack -------------
-    inline void marshall(::dsn::binary_writer& writer, const prepare_ack& val, uint16_t pos = 0xffff)
+    inline void marshall(::dsn::binary_writer& writer, const prepare_ack& val)
     {
         boost::shared_ptr<::dsn::binary_writer_transport> transport(new ::dsn::binary_writer_transport(writer));
         ::apache::thrift::protocol::TBinaryProtocol proto(transport);
@@ -169,7 +169,7 @@ namespace dsn { namespace replication {
     };
 
     // ---------- learn_state -------------
-    inline void marshall(::dsn::binary_writer& writer, const learn_state& val, uint16_t pos = 0xffff)
+    inline void marshall(::dsn::binary_writer& writer, const learn_state& val)
     {
         boost::shared_ptr<::dsn::binary_writer_transport> transport(new ::dsn::binary_writer_transport(writer));
         ::apache::thrift::protocol::TBinaryProtocol proto(transport);
@@ -184,7 +184,7 @@ namespace dsn { namespace replication {
     };
 
     // ---------- learn_request -------------
-    inline void marshall(::dsn::binary_writer& writer, const learn_request& val, uint16_t pos = 0xffff)
+    inline void marshall(::dsn::binary_writer& writer, const learn_request& val)
     {
         boost::shared_ptr<::dsn::binary_writer_transport> transport(new ::dsn::binary_writer_transport(writer));
         ::apache::thrift::protocol::TBinaryProtocol proto(transport);
@@ -199,7 +199,7 @@ namespace dsn { namespace replication {
     };
 
     // ---------- learn_response -------------
-    inline void marshall(::dsn::binary_writer& writer, const learn_response& val, uint16_t pos = 0xffff)
+    inline void marshall(::dsn::binary_writer& writer, const learn_response& val)
     {
         boost::shared_ptr<::dsn::binary_writer_transport> transport(new ::dsn::binary_writer_transport(writer));
         ::apache::thrift::protocol::TBinaryProtocol proto(transport);
@@ -214,7 +214,7 @@ namespace dsn { namespace replication {
     };
 
     // ---------- group_check_request -------------
-    inline void marshall(::dsn::binary_writer& writer, const group_check_request& val, uint16_t pos = 0xffff)
+    inline void marshall(::dsn::binary_writer& writer, const group_check_request& val)
     {
         boost::shared_ptr<::dsn::binary_writer_transport> transport(new ::dsn::binary_writer_transport(writer));
         ::apache::thrift::protocol::TBinaryProtocol proto(transport);
@@ -229,7 +229,7 @@ namespace dsn { namespace replication {
     };
 
     // ---------- group_check_response -------------
-    inline void marshall(::dsn::binary_writer& writer, const group_check_response& val, uint16_t pos = 0xffff)
+    inline void marshall(::dsn::binary_writer& writer, const group_check_response& val)
     {
         boost::shared_ptr<::dsn::binary_writer_transport> transport(new ::dsn::binary_writer_transport(writer));
         ::apache::thrift::protocol::TBinaryProtocol proto(transport);
@@ -244,7 +244,7 @@ namespace dsn { namespace replication {
     };
 
     // ---------- meta_request_header -------------
-    inline void marshall(::dsn::binary_writer& writer, const meta_request_header& val, uint16_t pos = 0xffff)
+    inline void marshall(::dsn::binary_writer& writer, const meta_request_header& val)
     {
         boost::shared_ptr<::dsn::binary_writer_transport> transport(new ::dsn::binary_writer_transport(writer));
         ::apache::thrift::protocol::TBinaryProtocol proto(transport);
@@ -259,7 +259,7 @@ namespace dsn { namespace replication {
     };
 
     // ---------- meta_response_header -------------
-    inline void marshall(::dsn::binary_writer& writer, const meta_response_header& val, uint16_t pos = 0xffff)
+    inline void marshall(::dsn::binary_writer& writer, const meta_response_header& val)
     {
         boost::shared_ptr<::dsn::binary_writer_transport> transport(new ::dsn::binary_writer_transport(writer));
         ::apache::thrift::protocol::TBinaryProtocol proto(transport);
@@ -274,7 +274,7 @@ namespace dsn { namespace replication {
     };
 
     // ---------- configuration_update_request -------------
-    inline void marshall(::dsn::binary_writer& writer, const configuration_update_request& val, uint16_t pos = 0xffff)
+    inline void marshall(::dsn::binary_writer& writer, const configuration_update_request& val)
     {
         boost::shared_ptr<::dsn::binary_writer_transport> transport(new ::dsn::binary_writer_transport(writer));
         ::apache::thrift::protocol::TBinaryProtocol proto(transport);
@@ -289,7 +289,7 @@ namespace dsn { namespace replication {
     };
 
     // ---------- configuration_update_response -------------
-    inline void marshall(::dsn::binary_writer& writer, const configuration_update_response& val, uint16_t pos = 0xffff)
+    inline void marshall(::dsn::binary_writer& writer, const configuration_update_response& val)
     {
         boost::shared_ptr<::dsn::binary_writer_transport> transport(new ::dsn::binary_writer_transport(writer));
         ::apache::thrift::protocol::TBinaryProtocol proto(transport);
@@ -304,7 +304,7 @@ namespace dsn { namespace replication {
     };
 
     // ---------- configuration_proposal_request -------------
-    inline void marshall(::dsn::binary_writer& writer, const configuration_proposal_request& val, uint16_t pos = 0xffff)
+    inline void marshall(::dsn::binary_writer& writer, const configuration_proposal_request& val)
     {
         boost::shared_ptr<::dsn::binary_writer_transport> transport(new ::dsn::binary_writer_transport(writer));
         ::apache::thrift::protocol::TBinaryProtocol proto(transport);
@@ -319,7 +319,7 @@ namespace dsn { namespace replication {
     };
 
     // ---------- configuration_query_by_node_request -------------
-    inline void marshall(::dsn::binary_writer& writer, const configuration_query_by_node_request& val, uint16_t pos = 0xffff)
+    inline void marshall(::dsn::binary_writer& writer, const configuration_query_by_node_request& val)
     {
         boost::shared_ptr<::dsn::binary_writer_transport> transport(new ::dsn::binary_writer_transport(writer));
         ::apache::thrift::protocol::TBinaryProtocol proto(transport);
@@ -334,7 +334,7 @@ namespace dsn { namespace replication {
     };
 
     // ---------- configuration_query_by_node_response -------------
-    inline void marshall(::dsn::binary_writer& writer, const configuration_query_by_node_response& val, uint16_t pos = 0xffff)
+    inline void marshall(::dsn::binary_writer& writer, const configuration_query_by_node_response& val)
     {
         boost::shared_ptr<::dsn::binary_writer_transport> transport(new ::dsn::binary_writer_transport(writer));
         ::apache::thrift::protocol::TBinaryProtocol proto(transport);
@@ -349,7 +349,7 @@ namespace dsn { namespace replication {
     };
 
     // ---------- configuration_query_by_index_request -------------
-    inline void marshall(::dsn::binary_writer& writer, const configuration_query_by_index_request& val, uint16_t pos = 0xffff)
+    inline void marshall(::dsn::binary_writer& writer, const configuration_query_by_index_request& val)
     {
         boost::shared_ptr<::dsn::binary_writer_transport> transport(new ::dsn::binary_writer_transport(writer));
         ::apache::thrift::protocol::TBinaryProtocol proto(transport);
@@ -364,7 +364,7 @@ namespace dsn { namespace replication {
     };
 
     // ---------- configuration_query_by_index_response -------------
-    inline void marshall(::dsn::binary_writer& writer, const configuration_query_by_index_response& val, uint16_t pos = 0xffff)
+    inline void marshall(::dsn::binary_writer& writer, const configuration_query_by_index_response& val)
     {
         boost::shared_ptr<::dsn::binary_writer_transport> transport(new ::dsn::binary_writer_transport(writer));
         ::apache::thrift::protocol::TBinaryProtocol proto(transport);
@@ -379,7 +379,7 @@ namespace dsn { namespace replication {
     };
 
     // ---------- query_replica_decree_request -------------
-    inline void marshall(::dsn::binary_writer& writer, const query_replica_decree_request& val, uint16_t pos = 0xffff)
+    inline void marshall(::dsn::binary_writer& writer, const query_replica_decree_request& val)
     {
         boost::shared_ptr<::dsn::binary_writer_transport> transport(new ::dsn::binary_writer_transport(writer));
         ::apache::thrift::protocol::TBinaryProtocol proto(transport);
@@ -394,7 +394,7 @@ namespace dsn { namespace replication {
     };
 
     // ---------- query_replica_decree_response -------------
-    inline void marshall(::dsn::binary_writer& writer, const query_replica_decree_response& val, uint16_t pos = 0xffff)
+    inline void marshall(::dsn::binary_writer& writer, const query_replica_decree_response& val)
     {
         boost::shared_ptr<::dsn::binary_writer_transport> transport(new ::dsn::binary_writer_transport(writer));
         ::apache::thrift::protocol::TBinaryProtocol proto(transport);
@@ -469,22 +469,12 @@ namespace dsn { namespace replication {
     {
         int32_t app_id;
         int32_t pidx;
-
-        bool operator < (const global_partition_id& r) const
-        {
-            return app_id < r.app_id || (app_id == r.app_id && pidx < r.pidx);
-        }
-
-        bool operator == (const global_partition_id& r) const
-        {
-            return app_id == r.app_id && pidx == r.pidx;
-        }
     };
 
-    inline void marshall(::dsn::binary_writer& writer, const global_partition_id& val, uint16_t pos = 0xffff)
+    inline void marshall(::dsn::binary_writer& writer, const global_partition_id& val)
     {
-        marshall(writer, val.app_id, pos);
-        marshall(writer, val.pidx, pos);
+        marshall(writer, val.app_id);
+        marshall(writer, val.pidx);
     };
 
     inline void unmarshall(::dsn::binary_reader& reader, __out_param global_partition_id& val)
@@ -503,13 +493,13 @@ namespace dsn { namespace replication {
         int64_t last_committed_decree;
     };
 
-    inline void marshall(::dsn::binary_writer& writer, const mutation_header& val, uint16_t pos = 0xffff)
+    inline void marshall(::dsn::binary_writer& writer, const mutation_header& val)
     {
-        marshall(writer, val.gpid, pos);
-        marshall(writer, val.ballot, pos);
-        marshall(writer, val.decree, pos);
-        marshall(writer, val.log_offset, pos);
-        marshall(writer, val.last_committed_decree, pos);
+        marshall(writer, val.gpid);
+        marshall(writer, val.ballot);
+        marshall(writer, val.decree);
+        marshall(writer, val.log_offset);
+        marshall(writer, val.last_committed_decree);
     };
 
     inline void unmarshall(::dsn::binary_reader& reader, __out_param mutation_header& val)
@@ -528,10 +518,10 @@ namespace dsn { namespace replication {
         std::vector< ::dsn::blob> updates;
     };
 
-    inline void marshall(::dsn::binary_writer& writer, const mutation_data& val, uint16_t pos = 0xffff)
+    inline void marshall(::dsn::binary_writer& writer, const mutation_data& val)
     {
-        marshall(writer, val.header, pos);
-        marshall(writer, val.updates, pos);
+        marshall(writer, val.header);
+        marshall(writer, val.updates);
     };
 
     inline void unmarshall(::dsn::binary_reader& reader, __out_param mutation_data& val)
@@ -553,16 +543,16 @@ namespace dsn { namespace replication {
         int64_t last_committed_decree;
     };
 
-    inline void marshall(::dsn::binary_writer& writer, const partition_configuration& val, uint16_t pos = 0xffff)
+    inline void marshall(::dsn::binary_writer& writer, const partition_configuration& val)
     {
-        marshall(writer, val.app_type, pos);
-        marshall(writer, val.gpid, pos);
-        marshall(writer, val.ballot, pos);
-        marshall(writer, val.max_replica_count, pos);
-        marshall(writer, val.primary, pos);
-        marshall(writer, val.secondaries, pos);
-        marshall(writer, val.drop_outs, pos);
-        marshall(writer, val.last_committed_decree, pos);
+        marshall(writer, val.app_type);
+        marshall(writer, val.gpid);
+        marshall(writer, val.ballot);
+        marshall(writer, val.max_replica_count);
+        marshall(writer, val.primary);
+        marshall(writer, val.secondaries);
+        marshall(writer, val.drop_outs);
+        marshall(writer, val.last_committed_decree);
     };
 
     inline void unmarshall(::dsn::binary_reader& reader, __out_param partition_configuration& val)
@@ -586,12 +576,12 @@ namespace dsn { namespace replication {
         partition_status status;
     };
 
-    inline void marshall(::dsn::binary_writer& writer, const replica_configuration& val, uint16_t pos = 0xffff)
+    inline void marshall(::dsn::binary_writer& writer, const replica_configuration& val)
     {
-        marshall(writer, val.gpid, pos);
-        marshall(writer, val.ballot, pos);
-        marshall(writer, val.primary, pos);
-        marshall(writer, val.status, pos);
+        marshall(writer, val.gpid);
+        marshall(writer, val.ballot);
+        marshall(writer, val.primary);
+        marshall(writer, val.status);
     };
 
     inline void unmarshall(::dsn::binary_reader& reader, __out_param replica_configuration& val)
@@ -609,10 +599,10 @@ namespace dsn { namespace replication {
         mutation_data mu;
     };
 
-    inline void marshall(::dsn::binary_writer& writer, const prepare_msg& val, uint16_t pos = 0xffff)
+    inline void marshall(::dsn::binary_writer& writer, const prepare_msg& val)
     {
-        marshall(writer, val.config, pos);
-        marshall(writer, val.mu, pos);
+        marshall(writer, val.config);
+        marshall(writer, val.mu);
     };
 
     inline void unmarshall(::dsn::binary_reader& reader, __out_param prepare_msg& val)
@@ -630,12 +620,12 @@ namespace dsn { namespace replication {
         int64_t version_decree;
     };
 
-    inline void marshall(::dsn::binary_writer& writer, const read_request_header& val, uint16_t pos = 0xffff)
+    inline void marshall(::dsn::binary_writer& writer, const read_request_header& val)
     {
-        marshall(writer, val.gpid, pos);
-        marshall(writer, val.code, pos);
-        marshall(writer, val.semantic, pos);
-        marshall(writer, val.version_decree, pos);
+        marshall(writer, val.gpid);
+        marshall(writer, val.code);
+        marshall(writer, val.semantic);
+        marshall(writer, val.version_decree);
     };
 
     inline void unmarshall(::dsn::binary_reader& reader, __out_param read_request_header& val)
@@ -653,10 +643,10 @@ namespace dsn { namespace replication {
         int32_t code;
     };
 
-    inline void marshall(::dsn::binary_writer& writer, const write_request_header& val, uint16_t pos = 0xffff)
+    inline void marshall(::dsn::binary_writer& writer, const write_request_header& val)
     {
-        marshall(writer, val.gpid, pos);
-        marshall(writer, val.code, pos);
+        marshall(writer, val.gpid);
+        marshall(writer, val.code);
     };
 
     inline void unmarshall(::dsn::binary_reader& reader, __out_param write_request_header& val)
@@ -671,9 +661,9 @@ namespace dsn { namespace replication {
         ::dsn::error_code err;
     };
 
-    inline void marshall(::dsn::binary_writer& writer, const rw_response_header& val, uint16_t pos = 0xffff)
+    inline void marshall(::dsn::binary_writer& writer, const rw_response_header& val)
     {
-        marshall(writer, val.err, pos);
+        marshall(writer, val.err);
     };
 
     inline void unmarshall(::dsn::binary_reader& reader, __out_param rw_response_header& val)
@@ -692,14 +682,14 @@ namespace dsn { namespace replication {
         int64_t last_committed_decree_in_prepare_list;
     };
 
-    inline void marshall(::dsn::binary_writer& writer, const prepare_ack& val, uint16_t pos = 0xffff)
+    inline void marshall(::dsn::binary_writer& writer, const prepare_ack& val)
     {
-        marshall(writer, val.gpid, pos);
-        marshall(writer, val.err, pos);
-        marshall(writer, val.ballot, pos);
-        marshall(writer, val.decree, pos);
-        marshall(writer, val.last_committed_decree_in_app, pos);
-        marshall(writer, val.last_committed_decree_in_prepare_list, pos);
+        marshall(writer, val.gpid);
+        marshall(writer, val.err);
+        marshall(writer, val.ballot);
+        marshall(writer, val.decree);
+        marshall(writer, val.last_committed_decree_in_app);
+        marshall(writer, val.last_committed_decree_in_prepare_list);
     };
 
     inline void unmarshall(::dsn::binary_reader& reader, __out_param prepare_ack& val)
@@ -719,10 +709,10 @@ namespace dsn { namespace replication {
         std::vector< std::string> files;
     };
 
-    inline void marshall(::dsn::binary_writer& writer, const learn_state& val, uint16_t pos = 0xffff)
+    inline void marshall(::dsn::binary_writer& writer, const learn_state& val)
     {
-        marshall(writer, val.meta, pos);
-        marshall(writer, val.files, pos);
+        marshall(writer, val.meta);
+        marshall(writer, val.files);
     };
 
     inline void unmarshall(::dsn::binary_reader& reader, __out_param learn_state& val)
@@ -743,14 +733,14 @@ namespace dsn { namespace replication {
         ::dsn::blob app_specific_learn_request;
     };
 
-    inline void marshall(::dsn::binary_writer& writer, const learn_request& val, uint16_t pos = 0xffff)
+    inline void marshall(::dsn::binary_writer& writer, const learn_request& val)
     {
-        marshall(writer, val.gpid, pos);
-        marshall(writer, val.learner, pos);
-        marshall(writer, val.signature, pos);
-        marshall(writer, val.last_committed_decree_in_app, pos);
-        marshall(writer, val.last_committed_decree_in_prepare_list, pos);
-        marshall(writer, val.app_specific_learn_request, pos);
+        marshall(writer, val.gpid);
+        marshall(writer, val.learner);
+        marshall(writer, val.signature);
+        marshall(writer, val.last_committed_decree_in_app);
+        marshall(writer, val.last_committed_decree_in_prepare_list);
+        marshall(writer, val.app_specific_learn_request);
     };
 
     inline void unmarshall(::dsn::binary_reader& reader, __out_param learn_request& val)
@@ -774,14 +764,14 @@ namespace dsn { namespace replication {
         std::string base_local_dir;
     };
 
-    inline void marshall(::dsn::binary_writer& writer, const learn_response& val, uint16_t pos = 0xffff)
+    inline void marshall(::dsn::binary_writer& writer, const learn_response& val)
     {
-        marshall(writer, val.err, pos);
-        marshall(writer, val.config, pos);
-        marshall(writer, val.commit_decree, pos);
-        marshall(writer, val.prepare_start_decree, pos);
-        marshall(writer, val.state, pos);
-        marshall(writer, val.base_local_dir, pos);
+        marshall(writer, val.err);
+        marshall(writer, val.config);
+        marshall(writer, val.commit_decree);
+        marshall(writer, val.prepare_start_decree);
+        marshall(writer, val.state);
+        marshall(writer, val.base_local_dir);
     };
 
     inline void unmarshall(::dsn::binary_reader& reader, __out_param learn_response& val)
@@ -805,13 +795,13 @@ namespace dsn { namespace replication {
         int64_t learner_signature; // signature if used for learning
     };
 
-    inline void marshall(::dsn::binary_writer& writer, const group_check_request& val, uint16_t pos = 0xffff)
+    inline void marshall(::dsn::binary_writer& writer, const group_check_request& val)
     {
-        marshall(writer, val.app_type, pos);
-        marshall(writer, val.node, pos);
-        marshall(writer, val.config, pos);
-        marshall(writer, val.last_committed_decree, pos);
-        marshall(writer, val.learner_signature, pos);
+        marshall(writer, val.app_type);
+        marshall(writer, val.node);
+        marshall(writer, val.config);
+        marshall(writer, val.last_committed_decree);
+        marshall(writer, val.learner_signature);
     };
 
     inline void unmarshall(::dsn::binary_reader& reader, __out_param group_check_request& val)
@@ -835,15 +825,15 @@ namespace dsn { namespace replication {
         ::dsn::end_point node;
     };
 
-    inline void marshall(::dsn::binary_writer& writer, const group_check_response& val, uint16_t pos = 0xffff)
+    inline void marshall(::dsn::binary_writer& writer, const group_check_response& val)
     {
-        marshall(writer, val.gpid, pos);
-        marshall(writer, val.err, pos);
-        marshall(writer, val.last_committed_decree_in_app, pos);
-        marshall(writer, val.last_committed_decree_in_prepare_list, pos);
-        marshall(writer, val.learner_status_, pos);
-        marshall(writer, val.learner_signature, pos);
-        marshall(writer, val.node, pos);
+        marshall(writer, val.gpid);
+        marshall(writer, val.err);
+        marshall(writer, val.last_committed_decree_in_app);
+        marshall(writer, val.last_committed_decree_in_prepare_list);
+        marshall(writer, val.learner_status_);
+        marshall(writer, val.learner_signature);
+        marshall(writer, val.node);
     };
 
     inline void unmarshall(::dsn::binary_reader& reader, __out_param group_check_response& val)
@@ -863,9 +853,9 @@ namespace dsn { namespace replication {
         int32_t rpc_tag;
     };
 
-    inline void marshall(::dsn::binary_writer& writer, const meta_request_header& val, uint16_t pos = 0xffff)
+    inline void marshall(::dsn::binary_writer& writer, const meta_request_header& val)
     {
-        marshall(writer, val.rpc_tag, pos);
+        marshall(writer, val.rpc_tag);
     };
 
     inline void unmarshall(::dsn::binary_reader& reader, __out_param meta_request_header& val)
@@ -880,10 +870,10 @@ namespace dsn { namespace replication {
         ::dsn::end_point primary_address;
     };
 
-    inline void marshall(::dsn::binary_writer& writer, const meta_response_header& val, uint16_t pos = 0xffff)
+    inline void marshall(::dsn::binary_writer& writer, const meta_response_header& val)
     {
-        marshall(writer, val.err, pos);
-        marshall(writer, val.primary_address, pos);
+        marshall(writer, val.err);
+        marshall(writer, val.primary_address);
     };
 
     inline void unmarshall(::dsn::binary_reader& reader, __out_param meta_response_header& val)
@@ -901,11 +891,11 @@ namespace dsn { namespace replication {
         ::dsn::end_point node; // target node
     };
 
-    inline void marshall(::dsn::binary_writer& writer, const configuration_update_request& val, uint16_t pos = 0xffff)
+    inline void marshall(::dsn::binary_writer& writer, const configuration_update_request& val)
     {
-        marshall(writer, val.config, pos);
-        marshall(writer, val.type, pos);
-        marshall(writer, val.node, pos);
+        marshall(writer, val.config);
+        marshall(writer, val.type);
+        marshall(writer, val.node);
     };
 
     inline void unmarshall(::dsn::binary_reader& reader, __out_param configuration_update_request& val)
@@ -922,10 +912,10 @@ namespace dsn { namespace replication {
         partition_configuration config;
     };
 
-    inline void marshall(::dsn::binary_writer& writer, const configuration_update_response& val, uint16_t pos = 0xffff)
+    inline void marshall(::dsn::binary_writer& writer, const configuration_update_response& val)
     {
-        marshall(writer, val.err, pos);
-        marshall(writer, val.config, pos);
+        marshall(writer, val.err);
+        marshall(writer, val.config);
     };
 
     inline void unmarshall(::dsn::binary_reader& reader, __out_param configuration_update_response& val)
@@ -944,13 +934,13 @@ namespace dsn { namespace replication {
         bool is_upgrade;
     };
 
-    inline void marshall(::dsn::binary_writer& writer, const configuration_proposal_request& val, uint16_t pos = 0xffff)
+    inline void marshall(::dsn::binary_writer& writer, const configuration_proposal_request& val)
     {
-        marshall(writer, val.config, pos);
-        marshall(writer, val.type, pos);
-        marshall(writer, val.node, pos);
-        marshall(writer, val.is_clean_data, pos);
-        marshall(writer, val.is_upgrade, pos);
+        marshall(writer, val.config);
+        marshall(writer, val.type);
+        marshall(writer, val.node);
+        marshall(writer, val.is_clean_data);
+        marshall(writer, val.is_upgrade);
     };
 
     inline void unmarshall(::dsn::binary_reader& reader, __out_param configuration_proposal_request& val)
@@ -968,9 +958,9 @@ namespace dsn { namespace replication {
         ::dsn::end_point node;
     };
 
-    inline void marshall(::dsn::binary_writer& writer, const configuration_query_by_node_request& val, uint16_t pos = 0xffff)
+    inline void marshall(::dsn::binary_writer& writer, const configuration_query_by_node_request& val)
     {
-        marshall(writer, val.node, pos);
+        marshall(writer, val.node);
     };
 
     inline void unmarshall(::dsn::binary_reader& reader, __out_param configuration_query_by_node_request& val)
@@ -985,10 +975,10 @@ namespace dsn { namespace replication {
         std::vector< partition_configuration> partitions;
     };
 
-    inline void marshall(::dsn::binary_writer& writer, const configuration_query_by_node_response& val, uint16_t pos = 0xffff)
+    inline void marshall(::dsn::binary_writer& writer, const configuration_query_by_node_response& val)
     {
-        marshall(writer, val.err, pos);
-        marshall(writer, val.partitions, pos);
+        marshall(writer, val.err);
+        marshall(writer, val.partitions);
     };
 
     inline void unmarshall(::dsn::binary_reader& reader, __out_param configuration_query_by_node_response& val)
@@ -1004,10 +994,10 @@ namespace dsn { namespace replication {
         std::vector< int32_t> partition_indices;
     };
 
-    inline void marshall(::dsn::binary_writer& writer, const configuration_query_by_index_request& val, uint16_t pos = 0xffff)
+    inline void marshall(::dsn::binary_writer& writer, const configuration_query_by_index_request& val)
     {
-        marshall(writer, val.app_name, pos);
-        marshall(writer, val.partition_indices, pos);
+        marshall(writer, val.app_name);
+        marshall(writer, val.partition_indices);
     };
 
     inline void unmarshall(::dsn::binary_reader& reader, __out_param configuration_query_by_index_request& val)
@@ -1025,12 +1015,12 @@ namespace dsn { namespace replication {
         std::vector< partition_configuration> partitions;
     };
 
-    inline void marshall(::dsn::binary_writer& writer, const configuration_query_by_index_response& val, uint16_t pos = 0xffff)
+    inline void marshall(::dsn::binary_writer& writer, const configuration_query_by_index_response& val)
     {
-        marshall(writer, val.err, pos);
-        marshall(writer, val.app_id, pos);
-        marshall(writer, val.partition_count, pos);
-        marshall(writer, val.partitions, pos);
+        marshall(writer, val.err);
+        marshall(writer, val.app_id);
+        marshall(writer, val.partition_count);
+        marshall(writer, val.partitions);
     };
 
     inline void unmarshall(::dsn::binary_reader& reader, __out_param configuration_query_by_index_response& val)
@@ -1048,10 +1038,10 @@ namespace dsn { namespace replication {
         ::dsn::end_point node;
     };
 
-    inline void marshall(::dsn::binary_writer& writer, const query_replica_decree_request& val, uint16_t pos = 0xffff)
+    inline void marshall(::dsn::binary_writer& writer, const query_replica_decree_request& val)
     {
-        marshall(writer, val.gpid, pos);
-        marshall(writer, val.node, pos);
+        marshall(writer, val.gpid);
+        marshall(writer, val.node);
     };
 
     inline void unmarshall(::dsn::binary_reader& reader, __out_param query_replica_decree_request& val)
@@ -1067,10 +1057,10 @@ namespace dsn { namespace replication {
         int64_t last_decree;
     };
 
-    inline void marshall(::dsn::binary_writer& writer, const query_replica_decree_response& val, uint16_t pos = 0xffff)
+    inline void marshall(::dsn::binary_writer& writer, const query_replica_decree_response& val)
     {
-        marshall(writer, val.err, pos);
-        marshall(writer, val.last_decree, pos);
+        marshall(writer, val.err);
+        marshall(writer, val.last_decree);
     };
 
     inline void unmarshall(::dsn::binary_reader& reader, __out_param query_replica_decree_response& val)

@@ -93,15 +93,9 @@ replica::~replica(void)
         delete _prepare_list;
         _prepare_list = nullptr;
     }
-
-    if (nullptr != _app)
-    {
-        delete _app;
-        _app = nullptr;
-    }
 }
 
-void replica::on_client_read(const read_request_header& meta, message_ptr& request)
+void replica::on_client_read(const read_request_header& meta, dsn_message_t request)
 {
     if (status() == PS_INACTIVE || status() == PS_POTENTIAL_SECONDARY)
     {
@@ -120,22 +114,20 @@ void replica::on_client_read(const read_request_header& meta, message_ptr& reque
     }
 
     dassert (_app != nullptr, "");
-    _app->dispatch_rpc_call(meta.code, request, true);
+
+    msg_binary_reader reader(request);
+    _app->dispatch_rpc_call(meta.code, reader, dsn_msg_create_response(request));
 }
 
-void replica::response_client_message(message_ptr& request, error_code error, decree d/* = invalid_decree*/)
+void replica::response_client_message(dsn_message_t request, error_code error, decree d/* = invalid_decree*/)
 {
     if (nullptr == request)
+    {
+        error.end_tracking();
         return;
+    }   
 
-    message_ptr resp = request->create_response();
-    resp->writer().write(error);
-
-    dassert(error != ERR_OK, "");
-    dinfo("handle replication request with rpc_id = %016llx failed, err = %s",
-        request->header().rpc_id, error.to_string());
-
-    rpc::reply(resp);
+    reply(request, error);
 }
 
 void replica::execute_mutation(mutation_ptr& mu)
@@ -147,21 +139,13 @@ void replica::execute_mutation(mutation_ptr& mu)
     {
     case PS_INACTIVE:
         if (_app->last_committed_decree() + 1 == mu->data.header.decree)
-            err = _app->write_internal(mu, false);
+            err = _app->write_internal(mu);
         break;
     case PS_PRIMARY:
     case PS_SECONDARY:
         {
         dassert (_app->last_committed_decree() + 1 == mu->data.header.decree, "");
-        bool ack_client = (status() == PS_PRIMARY);
-        if (ack_client)
-        {
-            if (mu->client_request == nullptr)
-                ack_client = false;
-            else if (mu->client_request->header().from_address.ip == 0)
-                ack_client = false;
-        }
-        err = _app->write_internal(mu, ack_client); 
+        err = _app->write_internal(mu);
         }
         break;
     case PS_POTENTIAL_SECONDARY:
@@ -169,7 +153,7 @@ void replica::execute_mutation(mutation_ptr& mu)
         {
             if (mu->data.header.decree == _app->last_committed_decree() + 1)
             {
-                err = _app->write_internal(mu, false); 
+                err = _app->write_internal(mu); 
             }
             else
             {
@@ -248,6 +232,8 @@ void replica::close()
     if (_app != nullptr)
     {
         _app->close(false);
+        delete _app;
+        _app = nullptr;
     }
 }
 

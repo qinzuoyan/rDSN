@@ -25,18 +25,18 @@
  */
 # pragma once
 # include "simple_kv.client.h"
-# include <dsn/internal/perf_test_helper.h>
 
 namespace dsn {
     namespace replication {
         namespace application {
 
             class simple_kv_perf_test_client
-                : public simple_kv_client, public ::dsn::service::perf_client_helper<simple_kv_perf_test_client>
+                : public simple_kv_client, 
+                  public ::dsn::service::perf_client_helper<simple_kv_perf_test_client>
             {
             public:
                 simple_kv_perf_test_client(
-                    const std::vector<end_point>& meta_servers,
+                    const std::vector<dsn_address_t>& meta_servers,
                     const char* app_name)
                     : simple_kv_client(meta_servers, app_name)
                 {
@@ -49,21 +49,21 @@ namespace dsn {
 
                     s.name = "simple_kv.write";
                     s.config_section = "task.RPC_SIMPLE_KV_SIMPLE_KV_WRITE";
-                    s.send_one = [this](){this->send_one_write(); };
+                    s.send_one = [this](int payload_bytes){this->send_one_write(payload_bytes); };
                     s.cases.clear();
                     load_suite_config(s);
                     suits.push_back(s);
 
                     s.name = "simple_kv.append";
                     s.config_section = "task.RPC_SIMPLE_KV_SIMPLE_KV_APPEND";
-                    s.send_one = [this](){this->send_one_append(); };
+                    s.send_one = [this](int payload_bytes){this->send_one_append(payload_bytes); };
                     s.cases.clear();
                     load_suite_config(s);
                     suits.push_back(s);
 
                     s.name = "simple_kv.read";
                     s.config_section = "task.RPC_SIMPLE_KV_SIMPLE_KV_READ";
-                    s.send_one = [this](){this->send_one_read(); };
+                    s.send_one = [this](int payload_bytes){this->send_one_read(payload_bytes); };
                     s.cases.clear();
                     load_suite_config(s);
                     suits.push_back(s);
@@ -73,15 +73,15 @@ namespace dsn {
 
                 virtual int get_partition_index(const std::string& key) 
                 {
-                    return (int)env::random32(0, 7);
+                    return (int)0; // dsn_random32(0, 7);
                 }
 
                 virtual int get_partition_index(const ::dsn::replication::application::kv_pair& key)
                 {
-                    return (int)env::random32(0, 7);
+                    return (int)0; // dsn_random32(0, 7);
                 }
                                 
-                void send_one_read()
+                void send_one_read(int payload_bytes)
                 {
                     void* ctx = prepare_send_one();
                     if (!ctx)
@@ -100,10 +100,10 @@ namespace dsn {
                     const std::string& resp,
                     void* context) override
                 {
-                    end_send_one(context, err, [this](){ send_one_read();});
+                    end_send_one(context, err);
                 }
 
-                void send_one_write()
+                void send_one_write(int payload_bytes)
                 {
                     void* ctx = prepare_send_one();
                     if (!ctx)
@@ -125,10 +125,10 @@ namespace dsn {
                     const int32_t& resp,
                     void* context) override
                 {
-                    end_send_one(context, err, [this](){ send_one_write(); });
+                    end_send_one(context, err);
                 }
 
-                void send_one_append()
+                void send_one_append(int payload_bytes)
                 {
                     void* ctx = prepare_send_one();
                     if (!ctx)
@@ -150,7 +150,7 @@ namespace dsn {
                     const int32_t& resp,
                     void* context) override
                 {
-                    end_send_one(context, err, [this](){ send_one_append(); });
+                    end_send_one(context, err);
                 }
             };
         }

@@ -42,10 +42,10 @@ void replica::on_config_proposal(configuration_update_request& proposal)
     check_hashed_access();
 
     ddebug(
-        "%s: on_config_proposal %s for %s:%d", 
+        "%s: on_config_proposal %s for %s:%hu", 
         name(),
         enum_to_string(proposal.type),
-        proposal.node.name.c_str(), static_cast<int>(proposal.node.port)
+        proposal.node.name, proposal.node.port
         );
 
     if (proposal.config.ballot < get_ballot())
@@ -141,12 +141,6 @@ void replica::add_potential_secondary(configuration_update_request& proposal)
     dassert (proposal.config.app_type == _primary_states.membership.app_type, "");
     dassert (proposal.config.primary == _primary_states.membership.primary, "");
     dassert (proposal.config.secondaries == _primary_states.membership.secondaries, "");
-
-    // zy: work around for meta server bug
-    if (_primary_states.check_exist(proposal.node, PS_PRIMARY)
-        || _primary_states.check_exist(proposal.node, PS_SECONDARY))
-        return;
-
     dassert (!_primary_states.check_exist(proposal.node, PS_PRIMARY), "");
     dassert (!_primary_states.check_exist(proposal.node, PS_SECONDARY), "");
 
@@ -175,12 +169,12 @@ void replica::add_potential_secondary(configuration_update_request& proposal)
     rpc::call_one_way_typed(proposal.node, RPC_LEARN_ADD_LEARNER, request, gpid_to_hash(get_gpid()));
 }
 
-void replica::upgrade_to_secondary_on_primary(const end_point& node)
+void replica::upgrade_to_secondary_on_primary(const dsn_address_t& node)
 {
     ddebug(
-            "%s: upgrade potential secondary %s:%d to secondary",
+            "%s: upgrade potential secondary %s:%hu to secondary",
             name(),
-            node.name.c_str(), static_cast<int>(node.port)
+            node.name, node.port
             );
 
     partition_configuration newConfig = _primary_states.membership;
@@ -204,7 +198,7 @@ void replica::downgrade_to_secondary_on_primary(configuration_update_request& pr
     dassert (proposal.config.secondaries == _primary_states.membership.secondaries, "");
     dassert (proposal.node == proposal.config.primary, "");
 
-    proposal.config.primary = dsn::end_point::INVALID;
+    proposal.config.primary = dsn_address_invalid;
     proposal.config.secondaries.push_back(proposal.node);
 
     update_configuration_on_meta_server(CT_DOWNGRADE_TO_SECONDARY, proposal.node, proposal.config);
@@ -223,7 +217,7 @@ void replica::downgrade_to_inactive_on_primary(configuration_update_request& pro
 
     if (proposal.node == proposal.config.primary)
     {
-        proposal.config.primary = dsn::end_point::INVALID;
+        proposal.config.primary = dsn_address_invalid;
     }
     else
     {
@@ -251,7 +245,7 @@ void replica::remove(configuration_update_request& proposal)
     {
     case PS_PRIMARY:
         dassert (proposal.config.primary == proposal.node, "");
-        proposal.config.primary = dsn::end_point::INVALID;
+        proposal.config.primary = dsn_address_invalid;
         break;
     case PS_SECONDARY:
         {
@@ -280,7 +274,7 @@ void replica::on_remove(const replica_configuration& request)
     update_local_configuration(request);
 }
 
-void replica::update_configuration_on_meta_server(config_type type, const end_point& node, partition_configuration& newConfig)
+void replica::update_configuration_on_meta_server(config_type type, const dsn_address_t& node, partition_configuration& newConfig)
 {
     newConfig.last_committed_decree = last_committed_decree();
 
@@ -297,17 +291,22 @@ void replica::update_configuration_on_meta_server(config_type type, const end_po
     update_local_configuration_with_no_ballot_change(PS_INACTIVE);
     set_inactive_state_transient(true);
 
-    message_ptr msg = message::create_request(RPC_CM_CALL);
+    dsn_message_t msg = dsn_msg_create_request(RPC_CM_CALL, 0, 0);
+    
     meta_request_header hdr;
     hdr.rpc_tag = RPC_CM_UPDATE_PARTITION_CONFIGURATION;
-    marshall(msg, hdr);
 
     std::shared_ptr<configuration_update_request> request(new configuration_update_request);
     request->config = newConfig;
-    request->config.ballot++;    
+    request->config.ballot++;
     request->type = type;
     request->node = node;
-    marshall(msg, *request);
+
+    {
+        msg_binary_writer writer(msg);
+        marshall(writer, hdr);
+        marshall(writer, *request);
+    }
 
     if (nullptr != _primary_states.reconfiguration_task)
     {
@@ -329,7 +328,7 @@ void replica::update_configuration_on_meta_server(config_type type, const end_po
 }
 
 
-void replica::on_update_configuration_on_meta_server_reply(error_code err, message_ptr& request, message_ptr& response, std::shared_ptr<configuration_update_request> req)
+void replica::on_update_configuration_on_meta_server_reply(error_code err, dsn_message_t request, dsn_message_t response, std::shared_ptr<configuration_update_request> req)
 {
     check_hashed_access();
 
@@ -365,7 +364,7 @@ void replica::on_update_configuration_on_meta_server_reply(error_code err, messa
     }
 
     configuration_update_response resp;
-    unmarshall(response, resp);    
+    ::unmarshall(response, resp);
 
     ddebug(
         "%s: update configuration reply with err %s, ballot %lld, local %lld",
@@ -552,6 +551,7 @@ bool replica::update_local_configuration(const replica_configuration& config, bo
         }        
         break;
     case PS_SECONDARY:
+        cleanup_preparing_mutations(true);
         switch (config.status)
         {
         case PS_PRIMARY:
@@ -701,9 +701,14 @@ void replica::on_config_sync(const partition_configuration& config)
     {
         update_configuration(config);
 
-        if (config.primary == primary_address() && status() == PS_INACTIVE && !_inactive_is_transient)
+        if (status() == PS_INACTIVE && !_inactive_is_transient)
         {
-            _stub->remove_replica_on_meta_server(config);
+            if (config.primary == primary_address() // dead primary
+                || config.primary == dsn_address_invalid // primary is dead (otherwise let primary remove this)
+                )
+            {
+                _stub->remove_replica_on_meta_server(config);
+            }
         }
     }
 }
@@ -723,24 +728,20 @@ void replica::replay_prepare_list()
 
     for (decree decree = start; decree <= end; decree++)
     {
-        mutation_ptr old = _prepare_list->get_mutation_by_decree(decree);
+        mutation_ptr old = _prepare_list->remove_mutation_by_decree(decree);
         mutation_ptr mu = new_mutation(decree);
 
         if (old != nullptr)
         {
-            mu->rpc_code = old->rpc_code;
-            mu->data.updates = old->data.updates;
-            mu->client_request = old->client_request;
-
-            dbg_dassert (mu->data.updates.size() == old->data.updates.size(), "");
+            mu->move_from(old);
         }
         else
         {
             mu->rpc_code = RPC_REPLICATION_WRITE_EMPTY;
             ddebug(
-                "%s: emit empty mutation %s when replay prepare list",
+                "%s: emit empty mutation %lld when replay prepare list",
                 name(),
-                mu->name()
+                decree
                 );
         }
 

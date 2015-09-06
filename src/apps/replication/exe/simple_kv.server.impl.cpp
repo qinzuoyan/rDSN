@@ -37,14 +37,14 @@ namespace dsn {
     namespace replication {
         namespace application {
             
-            simple_kv_service_impl::simple_kv_service_impl(replica* replica, configuration_ptr& cf)
-                : simple_kv_service(replica, cf)
+            simple_kv_service_impl::simple_kv_service_impl(replica* replica)
+                : simple_kv_service(replica), _lock(true)
             {
                 _test_file_learning = false;
             }
 
             // RPC_SIMPLE_KV_READ
-            void simple_kv_service_impl::on_read(const std::string& key, ::dsn::service::rpc_replier<std::string>& reply)
+            void simple_kv_service_impl::on_read(const std::string& key, ::dsn::rpc_replier<std::string>& reply)
             {
                 zauto_lock l(_lock);
                 
@@ -61,18 +61,18 @@ namespace dsn {
             }
 
             // RPC_SIMPLE_KV_WRITE
-            void simple_kv_service_impl::on_write(const kv_pair& pr, ::dsn::service::rpc_replier<int32_t>& reply)
+            void simple_kv_service_impl::on_write(const kv_pair& pr, ::dsn::rpc_replier<int32_t>& reply)
             {
                 zauto_lock l(_lock);
                 _store[pr.key] = pr.value;
                 ++_last_committed_decree;
 
-                dinfo("write %s, decree = %lld\n", pr.value.c_str(), last_committed_decree());
+                dinfo("write %s, decree = %lld\n", pr.key.c_str(), last_committed_decree());
                 reply(0);
             }
 
             // RPC_SIMPLE_KV_APPEND
-            void simple_kv_service_impl::on_append(const kv_pair& pr, ::dsn::service::rpc_replier<int32_t>& reply)
+            void simple_kv_service_impl::on_append(const kv_pair& pr, ::dsn::rpc_replier<int32_t>& reply)
             {
                 zauto_lock l(_lock);
                 auto it = _store.find(pr.key);
@@ -82,7 +82,7 @@ namespace dsn {
                     _store[pr.key] = pr.value;
                 ++_last_committed_decree;
 
-                dinfo("append %s, decree = %lld\n", pr.value.c_str(), last_committed_decree());
+                dinfo("append %s, decree = %lld\n", pr.key.c_str(), last_committed_decree());
                 reply(0);
             }
             
@@ -92,7 +92,7 @@ namespace dsn {
                 if (create_new)
                 {
                     boost::filesystem::remove_all(data_dir());
-                    boost::filesystem::create_directory(data_dir());
+                    mkdir_(data_dir().c_str());
                 }
                 else
                 {
@@ -129,7 +129,7 @@ namespace dsn {
                     if (s.substr(0, strlen("checkpoint.")) != std::string("checkpoint."))
                         continue;
 
-                    decree version = atol(s.substr(strlen("checkpoint.")).c_str());
+                    decree version = static_cast<decree>(atoll(s.substr(strlen("checkpoint.")).c_str()));
                     if (version > maxVersion)
                     {
                         maxVersion = version;
@@ -147,15 +147,18 @@ namespace dsn {
             {
                 zauto_lock l(_lock);
 
-                std::ifstream is(name.c_str());
+                std::ifstream is(name.c_str(), std::ios::binary);
                 if (!is.is_open())
                     return;
-
-
+                
                 _store.clear();
 
                 uint64_t count;
+                int magic;
+                
                 is.read((char*)&count, sizeof(count));
+                is.read((char*)&magic, sizeof(magic)); 
+                dassert(magic == 0xdeadbeef, "invalid checkpoint");
 
                 for (uint64_t i = 0; i < count; i++)
                 {
@@ -192,10 +195,13 @@ namespace dsn {
                 char name[256];
                 sprintf(name, "%s/checkpoint.%lld", data_dir().c_str(), 
                         static_cast<long long int>(last_committed_decree()));
-                std::ofstream os(name);
+                std::ofstream os(name, std::ios::binary);
 
                 uint64_t count = (uint64_t)_store.size();
+                int magic = 0xdeadbeef;
+                
                 os.write((const char*)&count, (uint32_t)sizeof(count));
+                os.write((const char*)&magic, (uint32_t)sizeof(magic));
 
                 for (auto it = _store.begin(); it != _store.end(); it++)
                 {
@@ -248,7 +254,7 @@ namespace dsn {
                 if (_test_file_learning)
                 {
                     std::stringstream ss;                
-                    ss << env::random32(0, 10000);
+                    ss << dsn_random32(0, 10000);
 
                     auto learn_test_file = data_dir() + "/test_learning_" + ss.str() + ".txt";
                     state.files.push_back(learn_test_file);
@@ -302,7 +308,7 @@ namespace dsn {
                 {
                     dassert(state.files.size() == 1, "");
                     std::string fn = learn_dir() + "/" + state.files[0];
-                    ret = boost::filesystem::exists(fn);
+                    ret = ::dsn::utils::is_file_or_dir_exist(fn.c_str());
                     if (ret)
                     {
                         std::string s;
