@@ -5,7 +5,7 @@
 
 #include <dsn/service_api_c.h>
 #include <dsn/cpp/utils.h>
-#include <dsn/dist/replication/client_ddl.h>
+#include "monitor_client.h"
 
 using namespace dsn::replication;
 
@@ -22,50 +22,67 @@ int init_environment(char* exe, char* config_file)
     return 0;
 }
 
-bool WebServlet(const sofa::pbrpc::HTTPRequest& request, sofa::pbrpc::HTTPResponse& response)
+bool ListApps(const sofa::pbrpc::HTTPRequest& request, sofa::pbrpc::HTTPResponse& response,
+              const std::string& meta, const std::vector<dsn::rpc_address>& meta_servers)
 {
-    google::protobuf::io::Printer printer(response.content.get(), '$');
     const std::map<std::string, std::string>& params = *request.query_params;
-    auto find = params.find("meta");
-    if (find == params.end()) {
-        printer.Print("<h2>ERROR: no param \"meta\" specified</h2>");
+    google::protobuf::io::Printer printer(response.content.get(), '$');
+    monitor_client client(meta_servers);
+
+    std::vector<app_info> apps;
+    dsn::error_code err = client.list_apps(apps);
+    if(err != dsn::ERR_OK) {
+        printer.Print("<h2>ERROR: get apps failed: $err$</h2>", "err", dsn_error_to_string(err));
         return true;
     }
-    std::string meta = find->second;
-    find = params.find("app");
-    if (find == params.end()) {
-        printer.Print("<h2>ERROR: no param \"app\" specified</h2>");
-        return true;
-    }
-    std::string app = find->second;
-    std::vector<std::string> meta_names;
-    dsn::utils::split_args(meta.c_str(), meta_names, ',');
-    if (meta_names.empty()) {
-        printer.Print("<h2>ERROR: invalid param \"meta\"</h2>");
-        return true;
-    }
-    std::vector<dsn::rpc_address> meta_servers;
-    for (auto& name : meta_names) {
-        dsn::rpc_address addr;
-        if (!addr.from_string_ipv4(name.c_str())) {
-            printer.Print("<h2>ERROR: invalid param \"meta\"</h2>");
-            return true;
+    printer.Print("<b>MetaServers:</b> <a href=\"/pegasus?meta=$meta$\">$meta$</a><br/>", "meta", meta);
+    printer.Print("<b>AppCount:</b> $app_count$<br/>", "app_count", boost::lexical_cast<std::string>(apps.size()));
+    printer.Print("<b>Apps:</b><br/>");
+    printer.Print("<table border=\"2\">");
+    printer.Print("<tr><th align=\"right\">Name</th><th align=\"right\">ID</th>"
+                  "<th align=\"right\">Type</th><th align=\"right\">PartitionCount</th>"
+                  "<th align=\"right\">Status</th></tr>");
+    for(int i = 0; i < apps.size(); i++)
+    {
+        const dsn::replication::app_info& app = apps[i];
+        printer.Print("<tr><td><a href=\"/pegasus?meta=$meta$&app=$name$\">$name$</a></td>",
+                      "meta", meta, "name", app.app_name);
+        printer.Print("<td>$id$</td>", "id", boost::lexical_cast<std::string>(app.app_id));
+        printer.Print("<td>$type$</td>", "type", app.app_type);
+        printer.Print("<td>$pcount$</td>", "pcount", boost::lexical_cast<std::string>(app.partition_count));
+        std::string str = enum_to_string(app.status);
+        size_t pos = str.rfind("::");
+        if (pos != std::string::npos) {
+            str = str.substr(pos+2);
         }
-        meta_servers.push_back(addr);
+        printer.Print("<td>$status$</td></tr>", "status", str);
     }
-    dsn::replication::replication_app_client_base::load_meta_servers(meta_servers);
-    client_ddl client(meta_servers);
+    printer.Print("</table>");
+
+    return true;
+}
+
+bool ListApp(const sofa::pbrpc::HTTPRequest& request, sofa::pbrpc::HTTPResponse& response,
+             const std::string& meta, const std::vector<dsn::rpc_address>& meta_servers,
+             const std::string& app_name)
+{
+    const std::map<std::string, std::string>& params = *request.query_params;
+    google::protobuf::io::Printer printer(response.content.get(), '$');
+    monitor_client client(meta_servers);
+
     int32_t app_id;
-    std::vector< partition_configuration> partitions;
-    dsn::error_code err = client.list_app(app, app_id, partitions);
+    std::vector<partition_configuration> partitions;
+    dsn::error_code err = client.list_app(app_name, app_id, partitions);
     if(err != dsn::ERR_OK) {
         printer.Print("<h2>ERROR: get app info failed: $err$</h2>", "err", dsn_error_to_string(err));
         return true;
     }
-    printer.Print("<b>AppName:</b> $app_name$<br>", "app_name", app);
-    printer.Print("<b>AppID:</b> $app_id$<br>", "app_id", boost::lexical_cast<std::string>(app_id));
-    printer.Print("<b>PartitionCount:</b> $pcount$<br>", "pcount", boost::lexical_cast<std::string>(partitions.size()));
-    printer.Print("<b>Partitions:</b><br>");
+    printer.Print("<b>MetaServers:</b> <a href=\"/pegasus?meta=$meta$\">$meta$</a><br/>", "meta", meta);
+    printer.Print("<b>AppName:</b> <a href=\"/pegasus?meta=$meta$&app=$app_name$\">$app_name$</a><br/>",
+                  "meta", meta, "app_name", app_name);
+    printer.Print("<b>AppID:</b> $app_id$<br/>", "app_id", boost::lexical_cast<std::string>(app_id));
+    printer.Print("<b>PartitionCount:</b> $pcount$<br/>", "pcount", boost::lexical_cast<std::string>(partitions.size()));
+    printer.Print("<b>Partitions:</b><br/>");
     printer.Print("<table border=\"2\">");
     printer.Print("<tr><th align=\"right\">PartitionID</th><th align=\"right\">Ballot</th>"
                   "<th align=\"right\">Primary</th><th align=\"right\">Secondaries</th></tr>");
@@ -84,7 +101,47 @@ bool WebServlet(const sofa::pbrpc::HTTPRequest& request, sofa::pbrpc::HTTPRespon
         printer.Print("<td>$secondaries$</td></tr>", "secondaries", oss.str());
     }
     printer.Print("</table>");
+
     return true;
+}
+
+bool WebServlet(const sofa::pbrpc::HTTPRequest& request, sofa::pbrpc::HTTPResponse& response)
+{
+    google::protobuf::io::Printer printer(response.content.get(), '$');
+    const std::map<std::string, std::string>& params = *request.query_params;
+
+    auto find = params.find("meta");
+    if (find == params.end()) {
+        printer.Print("<form action=\"/pegasus\" method=\"get\">");
+        printer.Print("<b>MetaServers:</b> <input type=\"text\" name=\"meta\" size=\"100\" value=\"10.235.114.34:34601,10.235.114.34:34602\"/><br/>");
+        printer.Print("<input type=\"submit\">");
+        printer.Print("</form>");
+        return true;
+    }
+    std::string meta = find->second;
+    std::vector<std::string> meta_names;
+    dsn::utils::split_args(meta.c_str(), meta_names, ',');
+    if (meta_names.empty()) {
+        printer.Print("<h2>ERROR: invalid param \"meta\"</h2>");
+        return true;
+    }
+    std::vector<dsn::rpc_address> meta_servers;
+    for (auto& name : meta_names) {
+        dsn::rpc_address addr;
+        if (!addr.from_string_ipv4(name.c_str())) {
+            printer.Print("<h2>ERROR: invalid param \"meta\": bad addr: $addr$</h2>", "addr", name);
+            return true;
+        }
+        meta_servers.push_back(addr);
+    }
+
+    find = params.find("app");
+    if (find == params.end()) {
+        return ListApps(request, response, meta, meta_servers);
+    }
+    else {
+        return ListApp(request, response, meta, meta_servers, find->second);
+    }
 }
 
 int main(int argc, char** argv)
@@ -106,13 +163,13 @@ int main(int argc, char** argv)
     sofa::pbrpc::RpcServer rpc_server(options);
 
     sofa::pbrpc::Servlet servlet = sofa::pbrpc::NewPermanentExtClosure(&WebServlet);
-    rpc_server.RegisterWebServlet("pegasus", servlet);
+    rpc_server.RegisterWebServlet("/pegasus", servlet);
 
     // Start rpc server.
     std::string addr = std::string("0.0.0.0:") + argv[2];
     if (!rpc_server.Start(addr)) {
         SLOG(ERROR, "start server failed");
-        return EXIT_FAILURE;
+        dsn_exit(EXIT_FAILURE);
     }
 
     // Wait signal.
@@ -121,7 +178,7 @@ int main(int argc, char** argv)
     // Stop rpc server.
     rpc_server.Stop();
 
-    return EXIT_SUCCESS;
+    dsn_exit(EXIT_SUCCESS);
 }
 
 /* vim: set ts=4 sw=4 sts=4 tw=100 */

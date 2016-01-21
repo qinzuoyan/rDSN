@@ -4,7 +4,7 @@ set(MY_PROJ_NAME dsn.web_monitor)
 
 # Source files under CURRENT project directory will be automatically included.
 # You can manually set MY_PROJ_SRC to include source files under other directories.
-set(MY_PROJ_SRC "../../../core/dll/core_main.cpp" "../client_ddl_tool/client_ddl.cpp")
+set(MY_PROJ_SRC "../../../core/dll/core_main.cpp")
 
 # Search mode for source files under CURRENT project directory?
 # "GLOB_RECURSE" for recursive search
@@ -15,16 +15,7 @@ set(MY_PROJ_INC_PATH "$ENV{SOFA_PBRPC_DIR}/include" "$ENV{PROTOBUF_DIR}/include"
 
 set(MY_PROJ_LIB_PATH "$ENV{SOFA_PBRPC_DIR}/lib" "$ENV{PROTOBUF_DIR}/lib")
 
-set(MY_BOOST_PACKAGES system)
-
 set(MY_PROJ_LIBS
-    #dsn.tools.nfs
-    #dsn.dev.cpp.core.use
-    #dsn.tools.hpc
-    #dsn.tools.simulator
-    #dsn.tools.common
-    #dsn.corelib
-    dsn.replication.clientlib
     sofa-pbrpc
     protobuf
     pthread
