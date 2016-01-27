@@ -2,6 +2,7 @@
 #include <google/protobuf/io/printer.h>
 #include <boost/lexical_cast.hpp>
 #include <iostream>
+#include <algorithm>
 
 #include <dsn/service_api_c.h>
 #include <dsn/cpp/utils.h>
@@ -28,16 +29,43 @@ bool ListApps(const sofa::pbrpc::HTTPRequest& request, sofa::pbrpc::HTTPResponse
     const std::map<std::string, std::string>& params = *request.query_params;
     google::protobuf::io::Printer printer(response.content.get(), '$');
     monitor_client client(meta_servers);
+    dsn::error_code err;
+
+    std::vector<node_info> nodes;
+    err = client.list_nodes(nodes);
+    if(err != dsn::ERR_OK) {
+        printer.Print("<h2>ERROR: get nodes failed: $err$</h2>", "err", dsn_error_to_string(err));
+        return true;
+    }
+    std::sort(nodes.begin(), nodes.end(), [](const node_info& l, const node_info& r){return l.address < r.address;});
 
     std::vector<app_info> apps;
-    dsn::error_code err = client.list_apps(apps);
+    err = client.list_apps(apps);
     if(err != dsn::ERR_OK) {
         printer.Print("<h2>ERROR: get apps failed: $err$</h2>", "err", dsn_error_to_string(err));
         return true;
     }
-    printer.Print("<b>MetaServers:</b> <a href=\"/pegasus?meta=$meta$\">$meta$</a><br/>", "meta", meta);
-    printer.Print("<b>AppCount:</b> $app_count$<br/>", "app_count", boost::lexical_cast<std::string>(apps.size()));
-    printer.Print("<b>Apps:</b><br/>");
+    std::sort(apps.begin(), apps.end(), [](const app_info& l, const app_info& r){return l.app_id < r.app_id;});
+
+    printer.Print("<h2>Cluster at <a href=\"/pegasus?meta=$meta$\">$meta$</a>&emsp;&emsp;<a href=\"/pegasus\">&gt;&gt;&gt;&gt;Change Cluster</a></h2>", "meta", meta);
+
+    printer.Print("<b>PrimaryMetaServer:</b> $primary_meta$<br/>", "primary_meta", client.primary_meta_server().to_string());
+
+    printer.Print("<h3>ReplicaServers (count=$count$)</h3><hr/>", "count", boost::lexical_cast<std::string>(nodes.size()));
+    printer.Print("<table border=\"2\">");
+    printer.Print("<tr><th align=\"right\">Address</th><th align=\"right\">Status</th></tr>");
+    for(int i = 0; i < nodes.size(); i++)
+    {
+        const dsn::replication::node_info& node = nodes[i];
+        std::string node_addr = node.address.to_string();
+        std::string node_url = node_addr.substr(0, node_addr.find(':')) + ":9001";
+        printer.Print("<tr><td><a href=\"http://$node_url$/\">$node_addr$</a></td>",
+                      "node_url", node_url, "node_addr", node_addr);
+        printer.Print("<td>$status$</td></tr>", "status", enum_to_string(node.status));
+    }
+    printer.Print("</table>");
+
+    printer.Print("<h3>Apps (count=$count$)</h3><hr/>", "count",  boost::lexical_cast<std::string>(apps.size()));
     printer.Print("<table border=\"2\">");
     printer.Print("<tr><th align=\"right\">Name</th><th align=\"right\">ID</th>"
                   "<th align=\"right\">Type</th><th align=\"right\">PartitionCount</th>"
@@ -50,12 +78,7 @@ bool ListApps(const sofa::pbrpc::HTTPRequest& request, sofa::pbrpc::HTTPResponse
         printer.Print("<td>$id$</td>", "id", boost::lexical_cast<std::string>(app.app_id));
         printer.Print("<td>$type$</td>", "type", app.app_type);
         printer.Print("<td>$pcount$</td>", "pcount", boost::lexical_cast<std::string>(app.partition_count));
-        std::string str = enum_to_string(app.status);
-        size_t pos = str.rfind("::");
-        if (pos != std::string::npos) {
-            str = str.substr(pos+2);
-        }
-        printer.Print("<td>$status$</td></tr>", "status", str);
+        printer.Print("<td>$status$</td></tr>", "status", enum_to_string(app.status));
     }
     printer.Print("</table>");
 
@@ -113,7 +136,7 @@ bool WebServlet(const sofa::pbrpc::HTTPRequest& request, sofa::pbrpc::HTTPRespon
     auto find = params.find("meta");
     if (find == params.end()) {
         printer.Print("<form action=\"/pegasus\" method=\"get\">");
-        printer.Print("<b>MetaServers:</b> <input type=\"text\" name=\"meta\" size=\"100\" value=\"10.235.114.34:34601,10.235.114.34:34602\"/><br/>");
+        printer.Print("<b>MetaServers:</b> <input type=\"text\" name=\"meta\" size=\"100\" value=\"10.235.114.34:34601,10.235.114.34:34602,10.235.114.34:34603\"/><br/>");
         printer.Print("<input type=\"submit\">");
         printer.Print("</form>");
         return true;

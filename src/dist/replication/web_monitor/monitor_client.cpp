@@ -83,6 +83,41 @@ dsn::error_code monitor_client::list_apps(std::vector<app_info>& apps)
     return dsn::ERR_OK;
 }
 
+dsn::error_code monitor_client::list_nodes(std::vector<node_info>& nodes)
+{
+    std::shared_ptr<configuration_list_nodes_request> req(new configuration_list_nodes_request());
+    req->status = NS_ALL;
+
+    auto resp_task = request_meta<configuration_list_nodes_request>(
+            RPC_CM_LIST_NODES,
+            req
+    );
+
+    // TODO(qinzuoyan):  resp_task->wait() without timeout will hang
+    bool wait_ret = resp_task->wait(3000);
+    if (!wait_ret)
+    {
+        resp_task->cancel(false);
+        return ERR_TIMEOUT;
+    }
+
+    if (resp_task->error() != dsn::ERR_OK)
+    {
+        return resp_task->error();
+    }
+
+    dsn::replication::configuration_list_nodes_response resp;
+    ::unmarshall(resp_task->response(), resp);
+    if(resp.err != dsn::ERR_OK)
+    {
+        return resp.err;
+    }
+
+    nodes.swap(resp.infos);
+
+    return dsn::ERR_OK;
+}
+
 dsn::error_code monitor_client::list_app(const std::string& app_name,
                                      int32_t& app_id,
                                      std::vector< partition_configuration>& partitions)

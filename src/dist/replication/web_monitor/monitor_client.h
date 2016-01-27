@@ -36,6 +36,7 @@
 
 #include <cctype>
 #include <dsn/dist/replication.h>
+#include "../../../core/core/group_address.h"
 
 namespace dsn{ namespace replication{
 
@@ -44,7 +45,11 @@ class monitor_client : public clientlet
 public:
     monitor_client(const std::vector<dsn::rpc_address>& meta_servers);
 
+    dsn::rpc_address primary_meta_server() { return _meta_servers.group_address()->leader(); }
+
     dsn::error_code list_apps(std::vector<app_info>& apps);
+
+    dsn::error_code list_nodes(std::vector<node_info>& nodes);
 
     dsn::error_code list_app(const std::string& app_name, /*out*/ int32_t& app_id, /*out*/ std::vector< partition_configuration>& partitions);
 
@@ -77,7 +82,6 @@ private:
 
 private:
     dsn::rpc_address _meta_servers;
-    std::vector<dsn::rpc_address> _meta_server_vector;
 };
 
 }} //namespace
