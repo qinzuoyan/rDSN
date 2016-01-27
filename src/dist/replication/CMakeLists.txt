@@ -1,0 +1,8 @@
+add_subdirectory(client_lib)
+add_subdirectory(meta_server)
+add_subdirectory(lib)
+add_subdirectory(global_checker)
+add_subdirectory(zookeeper)
+add_subdirectory(client_ddl_tool)
+add_subdirectory(web_monitor)
+add_subdirectory(test)

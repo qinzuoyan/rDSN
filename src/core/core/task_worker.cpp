@@ -343,6 +343,9 @@ void task_worker::loop()
             {                
                 next = task->next;
                 task->next = nullptr;
+
+                q->on_task_dequeued(task);
+
                 task->exec_internal();                
                 task = next;
 # ifndef NDEBUG

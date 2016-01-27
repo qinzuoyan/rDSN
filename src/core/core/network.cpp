@@ -112,10 +112,11 @@ namespace dsn
             }
 
             // if not resend, the message's callback will not be invoked until timeout,
-            // it's too slow.
-            // since we don't maintain the callback ptrs here, so we have no idea whether
-            // the callback is already issued or not.
-            // therefore, let's keep this (usually) slow way on failure with non-resend.
+            // it's too slow - let's try to mimic the failure by recving an empty reply
+            else if (is_client())
+            {
+                on_recv_reply(msg->header->id, nullptr, 0);
+            }
 
             // added in rpc_engine::reply (for server) or rpc_session::send_message (for client)
             msg->release_ref();
@@ -139,6 +140,13 @@ namespace dsn
             if (resend_msgs)
             {
                 _net.send_message(rmsg);
+            }
+
+            // if not resend, the message's callback will not be invoked until timeout,
+            // it's too slow - let's try to mimic the failure by recving an empty reply
+            else if (is_client())
+            {
+                on_recv_reply(rmsg->header->id, nullptr, 0);
             }
 
             // added in rpc_engine::reply (for server) or rpc_session::send_message (for client)
@@ -174,17 +182,8 @@ namespace dsn
         }
         
         // added in send_message
-        _message_count -= (int)(_sending_msgs.size());
+        _message_count.fetch_sub((int)_sending_msgs.size(), std::memory_order_relaxed);
         return _sending_msgs.size() > 0;
-    }
-
-    DEFINE_TASK_CODE(LPC_DELAY_RPC_REQUEST_RATE, TASK_PRIORITY_COMMON, THREAD_POOL_DEFAULT)
-    
-    void __delayed_rpc_session_read_next__(void* ctx)
-    {
-        rpc_session* s = (rpc_session*)ctx;
-        s->start_read_next();
-        s->release_ref();
     }
 
     void rpc_session::start_read_next(int read_next)
@@ -192,27 +191,29 @@ namespace dsn
         // server only
         if (_matcher == nullptr)
         {
-            int delay_ms = 0;
+            auto s = _recv_state.load(std::memory_order_relaxed);
+            switch (s)
             {
-                utils::auto_lock<utils::ex_lock_nr> l(_lock);
-                if (delay_ms > _delay_server_receive_ms)
-                    _delay_server_receive_ms = delay_ms;
-            }
-
-            // delayed read
-            if (delay_ms > 0)
-            {
-                auto delay_task = dsn_task_create(
-                    LPC_DELAY_RPC_REQUEST_RATE,
-                    __delayed_rpc_session_read_next__,
-                    this
-                    );
-                this->add_ref(); // released in __delayed_rpc_session_read_next__
-                dsn_task_call(delay_task, delay_ms);
-            }
-            else
-            {
+            case recv_state::normal:
                 do_read(read_next);
+                break;
+            case recv_state::to_be_paused:
+                if (_recv_state.compare_exchange_strong(s, recv_state::paused))
+                {
+                    // paused
+                }
+                else if (s == recv_state::normal)
+                {
+                    do_read(read_next);
+                }
+                else
+                {
+                    dassert (s == recv_state::paused, "invalid state %d", (int)s);
+                    dassert (false, "invalid execution flow here");
+                }
+                break;
+            default:
+                dassert(false, "invalid state %d", (int)s);
             }
         }
         else
@@ -224,15 +225,7 @@ namespace dsn
     void rpc_session::send_message(message_ex* msg)
     {
         //dinfo("%s: rpc_id = %016llx, code = %s", __FUNCTION__, msg->header->rpc_id, msg->header->rpc_name);
-        auto sp = task_spec::get(msg->local_rpc_code);
-        if (sp->rpc_allow_throttling)
-        {
-            int dms = _net.delay(_message_count++); // -- in unlink_message
-            if (dms > 0)
-            {
-                std::this_thread::sleep_for(std::chrono::milliseconds(dms));
-            }
-        }
+        _message_count.fetch_add(1, std::memory_order_relaxed); // -- in unlink_message
 
         msg->add_ref(); // released in on_send_completed        
         uint64_t sig;
@@ -280,12 +273,18 @@ namespace dsn
             utils::auto_lock<utils::ex_lock_nr> l(_lock);
             if (signature != 0)
             {
-                dassert(_is_sending_next 
-                    && _sending_msgs.size() > 0 
-                    && signature == _message_sent + 1, 
+                dassert(_is_sending_next
+                    && signature == _message_sent + 1,
                     "sent msg must be sending");
+                _is_sending_next = false;
 
-                _is_sending_next = false; 
+                // the _sending_msgs may have been cleared when reading of the rpc_session is failed.
+                if (_sending_msgs.size() == 0)
+                {
+                    dassert(_connect_state == SS_DISCONNECTED,
+                            "assume sending queue is cleared due to session closed");
+                    return;
+                }
                 
                 for (auto& msg : _sending_msgs)
                 {
@@ -321,11 +320,11 @@ namespace dsn
     rpc_session::rpc_session(
         connection_oriented_network& net, 
         ::dsn::rpc_address remote_addr,
-        std::shared_ptr<message_parser>& parser,
+        std::unique_ptr<message_parser>&& parser,
         bool is_client
         )
-        : _net(net), _remote_addr(remote_addr), _parser(parser),
-        _delay_server_receive_ms(0)
+        : _net(net), _remote_addr(remote_addr), _parser(std::move(parser)),
+        _recv_state(recv_state::normal)
     {
         _matcher = nullptr;
         _is_sending_next = false;
@@ -384,7 +383,7 @@ namespace dsn
             reply->to_address = _net.address();
         }
 
-        return _matcher->on_recv_reply(key, reply, delay_ms);
+        return _matcher->on_recv_reply(&_net, key, reply, delay_ms);
     }
 
     void rpc_session::on_recv_request(message_ex* msg, int delay_ms)
@@ -428,14 +427,25 @@ namespace dsn
 
     void network::on_recv_reply(message_ex* msg, int delay_ms)
     {
-        _engine->matcher()->on_recv_reply(msg->header->id, msg, delay_ms);
+        _engine->matcher()->on_recv_reply(this, msg->header->id, msg, delay_ms);
     }
 
-    std::shared_ptr<message_parser> network::new_message_parser()
+    std::unique_ptr<message_parser> network::new_message_parser()
     {
-        message_parser * parser = utils::factory_store<message_parser>::create(_parser_type.to_string(), PROVIDER_TYPE_MAIN, _message_buffer_block_size);
+        message_parser * parser = message_parser_manager::instance().create_parser(
+            _parser_type,
+            _message_buffer_block_size,
+            false
+            );
         dassert(parser, "message parser '%s' not registerd or invalid!", _parser_type.to_string());
-        return std::shared_ptr<message_parser>(parser);
+
+        return std::unique_ptr<message_parser>(parser);
+    }
+
+    std::pair<message_parser::factory2, size_t>  network::get_message_parser_info()
+    {
+        auto& pinfo = message_parser_manager::instance().get(_parser_type);
+        return std::make_pair(pinfo.factory2, pinfo.parser_size);
     }
 
     uint32_t network::get_local_ipv4()
@@ -477,6 +487,38 @@ namespace dsn
     connection_oriented_network::connection_oriented_network(rpc_engine* srv, network* inner_provider)
         : network(srv, inner_provider)
     {        
+    }
+
+    void connection_oriented_network::inject_drop_message(message_ex* msg, bool is_client, bool is_send)
+    {
+        rpc_session_ptr s = msg->io_session.get();
+        if (nullptr == s)
+        {
+            rpc_address peer_addr = is_send ? msg->to_address : msg->from_address;
+            if (is_client)
+            {
+                utils::auto_read_lock l(_clients_lock);
+                auto it = _clients.find(peer_addr);
+                if (it != _clients.end())
+                {
+                    s = it->second;
+                }
+            }
+            else
+            {
+                utils::auto_read_lock l(_servers_lock);
+                auto it = _servers.find(peer_addr);
+                if (it != _servers.end())
+                {
+                    s = it->second;
+                }
+            }
+        }
+        
+        if (nullptr != s)
+        {
+            s->close_on_fault_injection();
+        }
     }
 
     void connection_oriented_network::send_message(message_ex* request)

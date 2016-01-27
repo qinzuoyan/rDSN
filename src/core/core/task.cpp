@@ -140,6 +140,7 @@ task::task(dsn_task_code_t code, void* context, dsn_task_cancelled_handler_t on_
     _is_null = false;
     _on_cancel = nullptr;    
     next = nullptr;
+    _recv_ts_ns = 0;
     
     if (node != nullptr)
     {
@@ -450,6 +451,7 @@ void task::enqueue(task_worker_pool* pool)
             _spec->name.c_str()
             );
 
+        _recv_ts_ns = dsn_now_ns();
         pool->enqueue(this);
     }
 }
@@ -555,19 +557,7 @@ void rpc_response_task::enqueue(error_code err, message_ex* reply)
         reply->add_ref(); // released in dctor
     }
 
-    if (spec().on_rpc_response_enqueue.execute(this, true))
-    {
-        rpc_response_task::enqueue();
-    }
-
-    // release the task when necessary
-    else
-    {   
-        // because (1) initially, the ref count is zero
-        //         (2) upper apps may call add_ref already
-        this->add_ref();
-        this->release_ref();
-    }
+    rpc_response_task::enqueue();
 }
 
 void rpc_response_task::enqueue()
