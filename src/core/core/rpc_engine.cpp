@@ -154,9 +154,8 @@ namespace dsn {
             // server address side effect
             auto req = call->get_request();
             auto sp = task_spec::get(req->local_rpc_code);
-
-            // because current rpc forward is fake (resend from client), we cannot
-            // determine forward by "reply->from_address != req->to_address".
+            // TODO(qinzuoyan): because current rpc forward is fake (resend from client), we cannot
+            // determine forward by "reply->from_address != req->to_address"
             if (req->server_address.type() == HOST_TYPE_GROUP
                     && sp->grpc_mode == GRPC_TO_LEADER
                     && req->server_address.group_address()->possible_leader() != reply->from_address)
