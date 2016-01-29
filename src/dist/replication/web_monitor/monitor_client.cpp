@@ -51,7 +51,7 @@ monitor_client::monitor_client(const std::vector<dsn::rpc_address>& meta_servers
 dsn::error_code monitor_client::list_apps(std::vector<app_info>& apps)
 {
     std::shared_ptr<configuration_list_apps_request> req(new configuration_list_apps_request());
-    req->status = AS_ALL;
+    req->status = AS_INVALID;
 
     auto resp_task = request_meta<configuration_list_apps_request>(
             RPC_CM_LIST_APPS,
@@ -86,7 +86,7 @@ dsn::error_code monitor_client::list_apps(std::vector<app_info>& apps)
 dsn::error_code monitor_client::list_nodes(std::vector<node_info>& nodes)
 {
     std::shared_ptr<configuration_list_nodes_request> req(new configuration_list_nodes_request());
-    req->status = NS_ALL;
+    req->status = NS_INVALID;
 
     auto resp_task = request_meta<configuration_list_nodes_request>(
             RPC_CM_LIST_NODES,
