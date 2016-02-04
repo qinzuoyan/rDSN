@@ -49,7 +49,13 @@ namespace dsn
 {
     rpc_session::~rpc_session()
     {
-        clear(false);
+        clear_send_queue(false);
+
+        {
+            utils::auto_lock<utils::ex_lock_nr> l(_lock);
+            dassert(0 == _sending_msgs.size(), "sending queue is not cleared yet");
+            dassert(0 == _message_count.load(), "sending queue is not cleared yet");
+        }
     }
 
     bool rpc_session::try_connecting()
@@ -70,7 +76,6 @@ namespace dsn
             utils::auto_lock<utils::ex_lock_nr> l(_lock);
             dassert(_connect_state == SS_CONNECTING, "session must be connecting");
             _connect_state = SS_CONNECTED;
-            _reconnect_count_after_last_success = 0;
         }
 
         dinfo("client session connected to %s", remote_address().to_string());
@@ -82,7 +87,7 @@ namespace dsn
         _connect_state = SS_DISCONNECTED;
     }
 
-    void rpc_session::clear(bool resend_msgs)
+    void rpc_session::clear_send_queue(bool resend_msgs)
     {
         //
         // - in concurrent case, resending _sending_msgs and _messages
@@ -113,9 +118,10 @@ namespace dsn
 
             // if not resend, the message's callback will not be invoked until timeout,
             // it's too slow - let's try to mimic the failure by recving an empty reply
-            else if (is_client())
+            else if (msg->header->context.u.is_request 
+                && !msg->header->context.u.is_forwarded)
             {
-                on_recv_reply(msg->header->id, nullptr, 0);
+                _net.on_recv_reply(msg->header->id, nullptr, 0);
             }
 
             // added in rpc_engine::reply (for server) or rpc_session::send_message (for client)
@@ -132,6 +138,8 @@ namespace dsn
                     break;
 
                 msg->remove();
+
+                _message_count.fetch_sub(1, std::memory_order_relaxed);
             }
                         
             auto rmsg = CONTAINING_RECORD(msg, message_ex, dl);            
@@ -144,9 +152,10 @@ namespace dsn
 
             // if not resend, the message's callback will not be invoked until timeout,
             // it's too slow - let's try to mimic the failure by recving an empty reply
-            else if (is_client())
+            else if (rmsg->header->context.u.is_request
+                && !rmsg->header->context.u.is_forwarded)
             {
-                on_recv_reply(rmsg->header->id, nullptr, 0);
+                _net.on_recv_reply(rmsg->header->id, nullptr, 0);
             }
 
             // added in rpc_engine::reply (for server) or rpc_session::send_message (for client)
@@ -189,7 +198,7 @@ namespace dsn
     void rpc_session::start_read_next(int read_next)
     {
         // server only
-        if (_matcher == nullptr)
+        if (!is_client())
         {
             auto s = _recv_state.load(std::memory_order_relaxed);
             switch (s)
@@ -323,54 +332,27 @@ namespace dsn
         std::unique_ptr<message_parser>&& parser,
         bool is_client
         )
-        : _net(net), _remote_addr(remote_addr), _parser(std::move(parser)),
+        : _net(net),
+        _remote_addr(remote_addr),
+        _max_buffer_block_count_per_send(net.max_buffer_block_count_per_send()),
+        _parser(std::move(parser)),
+        _is_client(is_client),
+        _matcher(_net.engine()->matcher()),
+        _message_count(0),
+        _is_sending_next(false),
+        _connect_state(is_client ? SS_DISCONNECTED : SS_CONNECTED),
+        _message_sent(0),
         _recv_state(recv_state::normal)
     {
-        _matcher = nullptr;
-        _is_sending_next = false;
-        _message_count = 0;
-        _connect_state = is_client ? SS_DISCONNECTED : SS_CONNECTED;
-        _reconnect_count_after_last_success = 0;
-        _message_sent = 0;
-        _max_buffer_block_count_per_send = net.max_buffer_block_count_per_send();
-        _matcher = is_client ? _net.engine()->matcher() : nullptr;
     }
 
-    bool rpc_session::on_disconnected()
+    bool rpc_session::on_disconnected(bool is_write)
     {
         if (is_client())
         {
-            /* TODO(qinzuoyan): now that we will always call on_recv_reply() to notice the failure,
-             * there is no need to reconnect, which may cause problem when using the same socket.
-             *
-            // still connecting, let's retry
-            if (is_connecting() && ++_reconnect_count_after_last_success < 3)
-            {
-                set_disconnected();
-                connect();
-                return false;
-            }
-            */
-
             set_disconnected();
             rpc_session_ptr sp = this;
             _net.on_client_session_disconnected(sp);
-
-            // reconnect with new socket
-            //
-            // TODO(qinzuoyan): because '_reconnect_count_after_last_success' is a session scoped value,
-            // depending on it may cause endless resending, so we may always clear without resending:
-            //   clear(false);
-            //
-            // @imzhenyu: if we use clear(false), when there is a failure on established-connection, 
-            // the pending messages will be lost, this is considered harmful. the case for endless reconnecting
-            // is only possible when we can always *successfully* connect while fail on send, this should be
-            // very rare. so here we still use the old way but keep this mark here for future fix.
-            //
-            // @qinzuoyan: now that we will always call on_recv_reply() to notice the failure,
-            // there is no need to reconnect.
-            //clear(++_reconnect_count_after_last_success < 3);
-            clear(false);
         }
         
         else
@@ -378,32 +360,36 @@ namespace dsn
             rpc_session_ptr sp = this;
             _net.on_server_session_disconnected(sp);
         }
+
+        if (is_write)
+        {
+            clear_send_queue(false);
+        }
+
         return true;
     }
 
-    bool rpc_session::on_recv_reply(uint64_t key, message_ex* reply, int delay_ms)
+    void rpc_session::on_recv_message(message_ex* msg, int delay_ms)
     {
-        //dinfo("%s: rpc_id = %016llx, code = %s", __FUNCTION__, reply->header->rpc_id, reply->header->rpc_name);
-        if (reply != nullptr)
+        msg->to_address = _net.address();
+        msg->io_session = this;
+
+        if (msg->header->context.u.is_request)
         {
-            reply->from_address = remote_address();
-            reply->to_address = _net.address();
+            dbg_dassert(!is_client(), 
+                "only rpc server session can recv rpc requests");
+            _net.on_recv_request(msg, delay_ms);
         }
 
-        return _matcher->on_recv_reply(&_net, key, reply, delay_ms);
+        // both rpc server session and rpc client session can receive rpc reply
+        // specially, rpc client session can receive general rpc reply,  
+        // and rpc server session can receive forwarded rpc reply  
+        else
+        {
+            _matcher->on_recv_reply(&_net, msg->header->id, msg, delay_ms);
+        }
     }
-
-    void rpc_session::on_recv_request(message_ex* msg, int delay_ms)
-    {
-        //dinfo("%s: rpc_id = %016llx, code = %s", __FUNCTION__, msg->header->rpc_id, msg->header->rpc_name);
-        msg->from_address = remote_address();
-        msg->from_address.c_addr_ptr()->u.v4.port = msg->header->client.port;
-        msg->to_address = _net.address();
-
-        msg->io_session = this;
-        return _net.on_recv_request(msg, delay_ms);
-    }  
-
+    
     ////////////////////////////////////////////////////////////////////////////////////////////////
     network::network(rpc_engine* srv, network* inner_provider)
         : _engine(srv), _parser_type(NET_HDR_DSN)
@@ -429,12 +415,12 @@ namespace dsn
 
     void network::on_recv_request(message_ex* msg, int delay_ms)
     {
-        return _engine->on_recv_request(msg, delay_ms);
+        return _engine->on_recv_request(this, msg, delay_ms);
     }
 
-    void network::on_recv_reply(message_ex* msg, int delay_ms)
+    void network::on_recv_reply(uint64_t id, message_ex* msg, int delay_ms)
     {
-        _engine->matcher()->on_recv_reply(this, msg->header->id, msg, delay_ms);
+        _engine->matcher()->on_recv_reply(this, id, msg, delay_ms);
     }
 
     std::unique_ptr<message_parser> network::new_message_parser()
@@ -496,33 +482,25 @@ namespace dsn
     {        
     }
 
-    void connection_oriented_network::inject_drop_message(message_ex* msg, bool is_client, bool is_send)
+    void connection_oriented_network::inject_drop_message(message_ex* msg, bool is_send)
     {
-        rpc_session_ptr s = msg->io_session.get();
-        if (nullptr == s)
+        rpc_session_ptr s = msg->io_session;
+        if (s == nullptr)
         {
-            rpc_address peer_addr = is_send ? msg->to_address : msg->from_address;
-            if (is_client)
+            // - if io_session == nulltr, there must be is_send == true;
+            // - but if is_send == true, there may be is_session != nullptr, when it is a
+            //   normal (not forwarding) reply message from server to client, in which case
+            //   the io_session has also been set.
+            dassert(is_send, "received message should always has io_session set");
+            utils::auto_read_lock l(_clients_lock);
+            auto it = _clients.find(msg->to_address);
+            if (it != _clients.end())
             {
-                utils::auto_read_lock l(_clients_lock);
-                auto it = _clients.find(peer_addr);
-                if (it != _clients.end())
-                {
-                    s = it->second;
-                }
-            }
-            else
-            {
-                utils::auto_read_lock l(_servers_lock);
-                auto it = _servers.find(peer_addr);
-                if (it != _servers.end())
-                {
-                    s = it->second;
-                }
+                s = it->second;
             }
         }
-        
-        if (nullptr != s)
+
+        if (s != nullptr)
         {
             s->close_on_fault_injection();
         }

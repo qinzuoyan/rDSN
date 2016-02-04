@@ -138,7 +138,6 @@ task::task(dsn_task_code_t code, void* context, dsn_task_cancelled_handler_t on_
     _delay_milliseconds = 0;
     _wait_for_cancel = false;
     _is_null = false;
-    _on_cancel = nullptr;    
     next = nullptr;
     _recv_ts_ns = 0;
     
@@ -376,6 +375,8 @@ bool task::cancel(bool wait_until_finished, /*out*/ bool* finished /*= nullptr*/
 
         spec().on_task_cancelled.execute(this);
         signal_waiters();
+
+        _error.end_tracking();
     }
 
     if (finished)
@@ -451,7 +452,9 @@ void task::enqueue(task_worker_pool* pool)
             _spec->name.c_str()
             );
 
-        _recv_ts_ns = dsn_now_ns();
+        // disable this for the time being
+        //_recv_ts_ns = dsn_now_ns();
+
         pool->enqueue(this);
     }
 }
@@ -469,10 +472,21 @@ timer_task::timer_task(
     _interval_milliseconds(interval_milliseconds),
     _cb(cb)
 {
-    dassert (TASK_TYPE_COMPUTE == spec().type, "this must be a computation type task, please use DEFINE_TASK_CODE to define the task code");
+    dassert (TASK_TYPE_COMPUTE == spec().type,
+        "%s is not a computation type task, please use DEFINE_TASK_CODE to define the task code",
+        spec().name.c_str()
+        );
+}
 
+void timer_task::enqueue()
+{
     // enable timer randomization to avoid lots of timers execution simultaneously
-    set_delay(dsn_random32(0, interval_milliseconds));
+    if (delay_milliseconds() == 0 && spec().randomize_timer_delay_if_zero)
+    {
+        set_delay(dsn_random32(0, _interval_milliseconds));
+    }
+    
+    return task::enqueue();
 }
 
 void timer_task::exec()
@@ -488,13 +502,17 @@ void timer_task::exec()
     }
 }
 
-rpc_request_task::rpc_request_task(message_ex* request, rpc_handler_ptr& h, service_node* node)
-    : task(dsn_task_code_t(request->local_rpc_code), nullptr, nullptr, request->header->client.hash, node), 
+rpc_request_task::rpc_request_task(message_ex* request, rpc_handler_info* h, service_node* node)
+    : task(dsn_task_code_t(request->local_rpc_code), nullptr, 
+        [](void*) { dassert(false, "rpc request task cannot be cancelled"); },
+        request->header->client.hash, node),
     _request(request),
     _handler(h)
 {
     dbg_dassert (TASK_TYPE_RPC_REQUEST == spec().type, 
-        "task type must be RPC_REQUEST, please use DEFINE_TASK_CODE_RPC to define the task code");
+        "%s is not a RPC_REQUEST task, please use DEFINE_TASK_CODE_RPC to define the task code",
+        spec().name.c_str()
+        );
 
     _request->add_ref(); // released in dctor
 }
@@ -506,7 +524,6 @@ rpc_request_task::~rpc_request_task()
 
 void rpc_request_task::enqueue()
 {
-    spec().on_rpc_request_enqueue.execute(this);
     task::enqueue(node()->computation()->get_pool(spec().pool_code));
 }
 
@@ -527,7 +544,9 @@ rpc_response_task::rpc_response_task(
     set_error_code(ERR_IO_PENDING);
 
     dbg_dassert (TASK_TYPE_RPC_RESPONSE == spec().type, 
-        "task must be of RPC_RESPONSE type, please use DEFINE_TASK_CODE_RPC to define the request task code");
+        "%s is not of RPC_RESPONSE type, please use DEFINE_TASK_CODE_RPC to define the request task code",
+        spec().name.c_str()
+        );
 
     _request = request;
     _response = nullptr;
@@ -586,7 +605,10 @@ aio_task::aio_task(
     _cb = cb;
     _is_null = (_cb == nullptr);
 
-    dassert (TASK_TYPE_AIO == spec().type, "task must be of AIO type, please use DEFINE_TASK_CODE_AIO to define the task code");
+    dassert (TASK_TYPE_AIO == spec().type, 
+        "%s is not of AIO type, please use DEFINE_TASK_CODE_AIO to define the task code",
+        spec().name.c_str()
+        );
     set_error_code(ERR_IO_PENDING);
 
     auto disk = task::get_current_disk();

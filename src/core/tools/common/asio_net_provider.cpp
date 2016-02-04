@@ -36,6 +36,11 @@
 #include "asio_net_provider.h"
 #include "asio_rpc_session.h"
 
+# ifdef __TITLE__
+# undef __TITLE__
+# endif
+# define __TITLE__ "asio.net.provider"
+
 namespace dsn {
     namespace tools{
 
@@ -181,16 +186,15 @@ namespace dsn {
                             derror("invalid udp packet");
                         }
                     
-                        message->from_address.assign_ipv4(send_endpoint->address().to_v4().to_ulong(), send_endpoint->port());
                         message->to_address = address();
 
-                        if (!_is_client)
+                        if (message->header->context.u.is_request)
                         {
                             on_recv_request(message, 0);
                         }
                         else
                         {
-                            on_recv_reply(message, 0);
+                            on_recv_reply(message->header->id, message, 0);
                         }
                     }
 
