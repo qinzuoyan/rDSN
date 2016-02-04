@@ -23,6 +23,8 @@ set(MY_PROJ_LIBS
     z
     )
 
+set(MY_BOOST_PACKAGES system)
+
 set(MY_BINPLACES "${CMAKE_CURRENT_SOURCE_DIR}/config.ini")
 
 if(WIN32)
