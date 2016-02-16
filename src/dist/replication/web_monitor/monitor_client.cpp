@@ -155,6 +155,48 @@ dsn::error_code monitor_client::list_app(const std::string& app_name,
     return dsn::ERR_OK;
 }
 
+dsn::error_code monitor_client::list_node(const std::string& node,
+                                          std::vector<replica_info>& replicas)
+{
+    rpc_address node_address;
+    if (!node_address.from_string_ipv4(node.c_str()))
+    {
+        return ERR_INVALID_PARAMETERS;
+    }
+
+    std::shared_ptr<query_replica_info_request> req(new query_replica_info_request());
+    req->node = node_address;
+
+    auto resp_task = request_node<query_replica_info_request>(
+            node_address,
+            RPC_QUERY_REPLICA_INFO,
+            req
+    );
+
+    bool wait_ret = resp_task->wait(3000);
+    if (!wait_ret)
+    {
+        resp_task->cancel(false);
+        return ERR_TIMEOUT;
+    }
+
+    if (resp_task->error() != dsn::ERR_OK)
+    {
+        return resp_task->error();
+    }
+
+    dsn::replication::query_replica_info_response resp;
+    ::unmarshall(resp_task->response(), resp);
+    if(resp.err != dsn::ERR_OK)
+    {
+        return resp.err;
+    }
+
+    replicas.swap(resp.replicas);
+
+    return dsn::ERR_OK;
+}
+
 void monitor_client::end_meta_request(task_ptr callback, int retry_times, error_code err, dsn_message_t request, dsn_message_t resp)
 {
     ddebug("end_meta_request(): err=%s, retry_times=%d", err.to_string(), retry_times);

@@ -53,6 +53,8 @@ public:
 
     dsn::error_code list_app(const std::string& app_name, /*out*/ int32_t& app_id, /*out*/ std::vector< partition_configuration>& partitions);
 
+    dsn::error_code list_node(const std::string& node, /*out*/ std::vector<replica_info>& replicas);
+
 private:
     void end_meta_request(task_ptr callback, int retry_times, error_code err, dsn_message_t request, dsn_message_t resp);
 
@@ -74,6 +76,31 @@ private:
             [this, task] (error_code err, dsn_message_t request, dsn_message_t response)
             {
                 end_meta_request(std::move(task), 0, err, request, response);
+            },
+            0
+         );
+        return task;
+    }
+
+    template<typename TRequest>
+    dsn::task_ptr request_node(
+            rpc_address node,
+            dsn_task_code_t code,
+            std::shared_ptr<TRequest>& req,
+            int timeout_milliseconds = 0,
+            int reply_hash = 0
+            )
+    {
+        dsn_message_t msg = dsn_msg_create_request(code, timeout_milliseconds, 0);
+        task_ptr task = ::dsn::rpc::create_rpc_response_task(msg, nullptr, [](error_code, dsn_message_t, dsn_message_t) {}, reply_hash);
+        ::marshall(msg, *req);
+        rpc::call(
+            node,
+            msg,
+            this,
+            [this, task] (error_code err, dsn_message_t request, dsn_message_t response)
+            {
+                task->enqueue_rpc_response(err, response);
             },
             0
          );

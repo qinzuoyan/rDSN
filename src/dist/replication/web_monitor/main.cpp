@@ -58,16 +58,15 @@ bool ListApps(const sofa::pbrpc::HTTPRequest& request, sofa::pbrpc::HTTPResponse
     {
         const dsn::replication::node_info& node = nodes[i];
         std::string node_addr = node.address.to_string();
-        std::string node_url = node_addr.substr(0, node_addr.find(':')) + ":9001";
-        printer.Print("<tr><td><a href=\"http://$node_url$/\">$node_addr$</a></td>",
-                      "node_url", node_url, "node_addr", node_addr);
+        printer.Print("<tr><td><a href=\"/pegasus?meta=$meta$&node=$node_addr$\">$node_addr$</a></td>",
+                      "meta", meta, "node_addr", node_addr);
         printer.Print("<td>$status$</td></tr>", "status", enum_to_string(node.status));
     }
     printer.Print("</table>");
 
     printer.Print("<h3>Apps (count=$count$)</h3><hr/>", "count",  boost::lexical_cast<std::string>(apps.size()));
     printer.Print("<table border=\"2\">");
-    printer.Print("<tr><th align=\"right\">Name</th><th align=\"right\">ID</th>"
+    printer.Print("<tr><th align=\"right\">Name</th><th align=\"right\">AppID</th>"
                   "<th align=\"right\">Type</th><th align=\"right\">PartitionCount</th>"
                   "<th align=\"right\">Status</th></tr>");
     for(int i = 0; i < apps.size(); i++)
@@ -107,21 +106,93 @@ bool ListApp(const sofa::pbrpc::HTTPRequest& request, sofa::pbrpc::HTTPResponse&
     printer.Print("<b>PartitionCount:</b> $pcount$<br/>", "pcount", boost::lexical_cast<std::string>(partitions.size()));
     printer.Print("<b>Partitions:</b><br/>");
     printer.Print("<table border=\"2\">");
-    printer.Print("<tr><th align=\"right\">PartitionID</th><th align=\"right\">Ballot</th>"
+    printer.Print("<tr><th align=\"right\">GPID</th><th align=\"right\">Ballot</th>"
                   "<th align=\"right\">Primary</th><th align=\"right\">Secondaries</th></tr>");
     for(int i = 0; i < partitions.size(); i++)
     {
         const dsn::replication::partition_configuration& p = partitions[i];
-        printer.Print("<tr><td>$pid$</td>", "pid", boost::lexical_cast<std::string>(p.gpid.pidx));
+        printer.Print("<tr><td>$app_id$.$pid$</td>",
+                      "app_id", boost::lexical_cast<std::string>(p.gpid.app_id),
+                      "pid", boost::lexical_cast<std::string>(p.gpid.pidx));
         printer.Print("<td>$ballot$</td>", "ballot", boost::lexical_cast<std::string>(p.ballot));
-        printer.Print("<td>$primary$</td>", "primary", p.primary.to_std_string());
+        if (p.primary.is_invalid())
+        {
+            printer.Print("<td>$primary$</td>", "primary", p.primary.to_std_string());
+        }
+        else
+        {
+            printer.Print("<td><a href=\"/pegasus?meta=$meta$&node=$primary$\">$primary$</a></td>",
+                          "meta", meta, "primary", p.primary.to_std_string());
+        }
         std::ostringstream oss;
         for(int j = 0; j < p.secondaries.size(); j++)
         {
             if(j != 0) oss << ", ";
-            oss << p.secondaries[j].to_std_string();
+            std::string node = p.secondaries[j].to_std_string();
+            oss << "<a href=\"/pegasus?meta=" << meta << "&node=" << node << "\">" << node << "</a>";
         }
         printer.Print("<td>$secondaries$</td></tr>", "secondaries", oss.str());
+    }
+    printer.Print("</table>");
+
+    return true;
+}
+
+bool ListNode(const sofa::pbrpc::HTTPRequest& request, sofa::pbrpc::HTTPResponse& response,
+             const std::string& meta, const std::vector<dsn::rpc_address>& meta_servers,
+             const std::string& node)
+{
+    const std::map<std::string, std::string>& params = *request.query_params;
+    google::protobuf::io::Printer printer(response.content.get(), '$');
+    monitor_client client(meta_servers);
+
+    std::vector<replica_info> replicas;
+    dsn::error_code err = client.list_node(node, replicas);
+    if(err != dsn::ERR_OK) {
+        printer.Print("<h2>ERROR: get node info failed: $err$</h2>", "err", dsn_error_to_string(err));
+        return true;
+    }
+
+    std::map<partition_status, int> status_count;
+    status_count[PS_INACTIVE] = 0;
+    status_count[PS_ERROR] = 0;
+    status_count[PS_PRIMARY] = 0;
+    status_count[PS_SECONDARY] = 0;
+    status_count[PS_POTENTIAL_SECONDARY] = 0;
+    for (auto& r : replicas)
+    {
+        status_count[r.status] += 1;
+    }
+
+    printer.Print("<b>MetaServers:</b> <a href=\"/pegasus?meta=$meta$\">$meta$</a><br/>", "meta", meta);
+    printer.Print("<b>NodeAddress:</b> <a href=\"/pegasus?meta=$meta$&node=$node$\">$node$</a><br/>",
+                  "meta", meta, "node", node);
+
+    printer.Print("<b>ReplicaCount:</b> $count$<br/>", "count", boost::lexical_cast<std::string>(replicas.size()));
+    printer.Print("<table border=\"2\">");
+    printer.Print("<tr><th align=\"right\">Status</th><th align=\"right\">Count</th></tr>");
+    for (auto& i : status_count)
+    {
+        printer.Print("<tr><td>$status$</td>", "status", enum_to_string(i.first));
+        printer.Print("<td>$count$</td></tr>", "count", boost::lexical_cast<std::string>(i.second));
+    }
+    printer.Print("</table>");
+
+    printer.Print("<b>Replicas:</b><br/>");
+    printer.Print("<table border=\"2\">");
+    printer.Print("<tr><th align=\"right\">GPID</th><th align=\"right\">Ballot</th>"
+                  "<th align=\"right\">Status</th><th align=\"right\">LastCommittedDecree</th>"
+                  "<th align=\"right\">LastPreparedDecree</th><th align=\"right\">LastDurableDecree</th></tr>");
+    for (auto& r : replicas)
+    {
+        printer.Print("<tr><td>$app_id$.$pid$</td>",
+                      "app_id", boost::lexical_cast<std::string>(r.gpid.app_id),
+                      "pid", boost::lexical_cast<std::string>(r.gpid.pidx));
+        printer.Print("<td>$ballot$</td>", "ballot", boost::lexical_cast<std::string>(r.ballot));
+        printer.Print("<td>$status$</td>", "status", enum_to_string(r.status));
+        printer.Print("<td>$decree$</td>", "decree", boost::lexical_cast<std::string>(r.last_committed_decree));
+        printer.Print("<td>$decree$</td>", "decree", boost::lexical_cast<std::string>(r.last_prepared_decree));
+        printer.Print("<td>$decree$</td></tr>", "decree", boost::lexical_cast<std::string>(r.last_durable_decree));
     }
     printer.Print("</table>");
 
@@ -136,7 +207,7 @@ bool WebServlet(const sofa::pbrpc::HTTPRequest& request, sofa::pbrpc::HTTPRespon
     auto find = params.find("meta");
     if (find == params.end()) {
         printer.Print("<form action=\"/pegasus\" method=\"get\">");
-        printer.Print("<b>MetaServers:</b> <input type=\"text\" name=\"meta\" size=\"100\" value=\"10.235.114.34:34601,10.235.114.34:34602,10.235.114.34:34603\"/><br/>");
+        printer.Print("<b>MetaServers:</b> <input type=\"text\" name=\"meta\" size=\"100\" value=\"10.235.114.26:34601,10.235.114.26:34602,10.235.114.26:34603\"/><br/>");
         printer.Print("<input type=\"submit\">");
         printer.Print("</form>");
         return true;
@@ -159,12 +230,14 @@ bool WebServlet(const sofa::pbrpc::HTTPRequest& request, sofa::pbrpc::HTTPRespon
     }
 
     find = params.find("app");
-    if (find == params.end()) {
-        return ListApps(request, response, meta, meta_servers);
-    }
-    else {
+    if (find != params.end()) {
         return ListApp(request, response, meta, meta_servers, find->second);
     }
+    find = params.find("node");
+    if (find != params.end()) {
+        return ListNode(request, response, meta, meta_servers, find->second);
+    }
+    return ListApps(request, response, meta, meta_servers);
 }
 
 int main(int argc, char** argv)
